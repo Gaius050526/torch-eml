@@ -10,6 +10,8 @@ eml(x, y) = eˣ - ln(y)
 
 One function. Recursed. Every elementary function emerges.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gaius050526/torch-eml/blob/main/notebooks/quickstart.ipynb)
+
 ## Install
 
 ```bash
@@ -173,6 +175,8 @@ See [`examples/`](examples/) for complete runnable scripts:
 2. **Drop-in Head** — Replace MLP classification head with interpretable EML head
 3. **LLM Trunk** — Claude extracts features → EML head produces a scoring equation
 4. **Auto Search** — Auto-tune depth, prune, fine-tune, snap, and visualize
+5. **Physics Rediscovery** — Recover Kepler's law, inverse square law, and kinetic energy from noisy data
+6. **MLP vs EML** — Same accuracy, but only EML gives you the equation
 
 ## How It Works
 
