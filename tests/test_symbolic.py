@@ -1,4 +1,5 @@
 import math
+import pytest
 import torch
 import sympy
 from torch_eml.node import EMLNode
@@ -91,6 +92,31 @@ class TestToSymbolic:
         tree = EMLTree(depth=2)
         expr = to_symbolic(tree)
         assert "x0" in expr.string
+
+    def test_wrong_input_names_count_raises(self):
+        tree = EMLTree(depth=2)  # expects 4 names
+        with pytest.raises(ValueError, match="Expected 4 input names"):
+            to_symbolic(tree, input_names=["a", "b"])
+
+
+class TestSymbolicPython:
+    def test_generated_python_is_executable(self):
+        """The .python property should generate valid, executable Python."""
+        tree = EMLTree(depth=1)
+        with torch.no_grad():
+            tree.nodes[0].w_left.fill_(1.0)
+            tree.nodes[0].w_right.fill_(1.0)
+            tree.nodes[0].bias_left.fill_(0.0)
+            tree.nodes[0].bias_right.fill_(0.0)
+        expr = to_symbolic(tree, input_names=["x0", "x1"])
+        code = expr.python
+        assert "import math" in code
+        assert "def f(" in code
+        # Should actually execute without error
+        namespace = {}
+        exec(code, namespace)
+        result = namespace["f"](1.0, 2.0)
+        assert isinstance(result, float)
 
 
 from torch_eml.symbolic import snap, snap_value

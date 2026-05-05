@@ -15,6 +15,12 @@ class EMLNode(nn.Module):
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         left = self.w_left * x + self.bias_left
-        left = left.clamp(max=80.0)  # prevent exp overflow
+        left = left.clamp(min=-80.0, max=80.0)
         right = self.w_right * y + self.bias_right
         return torch.exp(left) - torch.log(torch.abs(right) + self.epsilon)
+
+    def __repr__(self) -> str:
+        return (
+            f"EMLNode(w_left={self.w_left.item():.4f}, w_right={self.w_right.item():.4f}, "
+            f"bias_left={self.bias_left.item():.4f}, bias_right={self.bias_right.item():.4f})"
+        )

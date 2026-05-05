@@ -1,5 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
+
+import pytest
 import torch
 from torch_eml.trunk import LLMTrunk
 
@@ -19,6 +21,10 @@ class TestLLMTrunkInit:
     def test_feature_names(self):
         trunk = LLMTrunk(provider="anthropic", model="test", features=FEATURES)
         assert trunk.feature_names == ["market_size", "team_exp", "growth"]
+
+    def test_invalid_provider_raises(self):
+        with pytest.raises(ValueError, match="provider must be"):
+            LLMTrunk(provider="invalid", model="test", features=FEATURES)
 
 
 class TestLLMTrunkExtract:
@@ -48,11 +54,8 @@ class TestLLMTrunkExtract:
             {"market_size": 4.2, "team_exp": 12.0}
         )
         trunk = LLMTrunk(provider="anthropic", model="test", features=FEATURES)
-        try:
+        with pytest.raises(ValueError, match="growth"):
             trunk.extract("Some pitch text")
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "growth" in str(e)
 
     @patch("torch_eml.trunk._call_anthropic")
     def test_non_numeric_raises(self, mock_call):
@@ -60,11 +63,8 @@ class TestLLMTrunkExtract:
             {"market_size": "big", "team_exp": 12.0, "growth": 0.85}
         )
         trunk = LLMTrunk(provider="anthropic", model="test", features=FEATURES)
-        try:
+        with pytest.raises(ValueError, match="market_size"):
             trunk.extract("Some pitch text")
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "market_size" in str(e)
 
     @patch("torch_eml.trunk._call_anthropic")
     def test_malformed_json_retries(self, mock_call):

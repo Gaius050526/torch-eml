@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch_eml.tree import EMLTree
 
@@ -23,6 +24,14 @@ class TestEMLTreeConstruction:
         tree = EMLTree(depth=4)
         assert tree.n_leaves == 16
 
+    def test_depth_zero_raises(self):
+        with pytest.raises(ValueError, match="depth must be >= 1"):
+            EMLTree(depth=0)
+
+    def test_depth_too_large_raises(self):
+        with pytest.raises(ValueError, match="Maximum depth is 10"):
+            EMLTree(depth=11)
+
 
 class TestEMLTreeForward:
     def test_output_shape(self):
@@ -40,11 +49,8 @@ class TestEMLTreeForward:
     def test_wrong_leaf_count_raises(self):
         tree = EMLTree(depth=3)
         x = torch.randn(16, 5)
-        try:
+        with pytest.raises(ValueError, match="Expected 8 leaf values"):
             tree(x)
-            assert False, "Should have raised"
-        except ValueError:
-            pass
 
     def test_no_nan_output(self):
         tree = EMLTree(depth=3)
@@ -78,3 +84,12 @@ class TestEMLTreeGradient:
         loss = out.sum()
         loss.backward()
         assert x.grad is not None
+
+
+class TestEMLTreeRepr:
+    def test_repr(self):
+        tree = EMLTree(depth=3)
+        r = repr(tree)
+        assert "depth=3" in r
+        assert "nodes=7" in r
+        assert "leaves=8" in r

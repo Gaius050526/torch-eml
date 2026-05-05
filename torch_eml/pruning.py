@@ -35,6 +35,31 @@ class ConstantNode(nn.Module):
         return torch.full_like(x, self.value)
 
 
+def _get_node_outputs(
+    tree: EMLTree, calibration_data: torch.Tensor
+) -> dict[int, torch.Tensor]:
+    """Run the tree forward and capture each node's output."""
+    outputs: dict[int, torch.Tensor] = {}
+    current_level = [calibration_data[:, i] for i in range(tree.n_leaves)]
+
+    node_idx = len(tree.nodes) - 1
+    for level in range(tree.depth - 1, -1, -1):
+        n_nodes_at_level = 2 ** level
+        next_level = []
+        for i in range(n_nodes_at_level):
+            left = current_level[2 * i]
+            right = current_level[2 * i + 1]
+            idx = node_idx - (n_nodes_at_level - 1 - i)
+            node = tree.nodes[idx]
+            out = node(left, right)
+            outputs[idx] = out
+            next_level.append(out)
+        node_idx -= n_nodes_at_level
+        current_level = next_level
+
+    return outputs
+
+
 def prune(
     tree: EMLTree,
     threshold: float,
@@ -42,8 +67,8 @@ def prune(
 ) -> PruneReport:
     """Prune low-contribution nodes from the tree.
 
-    For each node, measures how much the output changes when the node is
-    replaced with its mean constant output. If the change is below threshold,
+    For each node, measures how much the tree output changes when the node
+    is replaced with its mean output value. If the change is below threshold,
     the node is replaced with a ConstantNode.
 
     Args:
@@ -60,15 +85,18 @@ def prune(
     with torch.no_grad():
         original_output = tree(calibration_data).clone()
 
+        # Capture each node's individual output for mean computation
+        node_outputs = _get_node_outputs(tree, calibration_data)
+
+        # Try pruning each node from leaves up (reverse order)
         for idx in range(len(tree.nodes) - 1, -1, -1):
             node = tree.nodes[idx]
 
             if isinstance(node, ConstantNode):
                 continue
 
-            current_output = tree(calibration_data)
-
-            mean_val = current_output.mean().item()
+            # Use this node's mean output as the replacement constant
+            mean_val = node_outputs[idx].mean().item()
             original_node = tree.nodes[idx]
             tree.nodes[idx] = ConstantNode(mean_val, epsilon=original_node.epsilon)
 
@@ -78,6 +106,7 @@ def prune(
             if max_diff <= threshold:
                 pruned_count += 1
             else:
+                # Restore original node
                 tree.nodes[idx] = original_node
 
     with torch.no_grad():

@@ -150,7 +150,7 @@ The equation is not an approximation — it's a closed-form expression you can p
 ## Citations
 
 ```bibtex
-@article{odrzywolekl2026,
+@article{odrzywolel2026,
   title={All elementary functions from a single binary operator},
   author={Odrzywo{\l}ek, Andrzej},
   journal={arXiv preprint arXiv:2503.20022},
@@ -170,7 +170,7 @@ The equation is not an approximation — it's a closed-form expression you can p
 Contributions welcome. Please open an issue first to discuss what you'd like to change.
 
 ```bash
-git clone https://github.com/leemosbacker/torch-eml.git
+git clone https://github.com/torch-eml/torch-eml.git
 cd torch-eml
 pip install -e ".[dev]"
 pytest

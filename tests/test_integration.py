@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch_eml import EMLHead, EMLTree, EMLNode
 from torch_eml.symbolic import SymbolicExpression
@@ -35,6 +36,11 @@ class TestEMLHeadConvenience:
         X = torch.randn(32, 4)
         report = head.prune(threshold=0.1, calibration_data=X)
         assert isinstance(report, PruneReport)
+
+    def test_prune_without_data_raises(self):
+        head = EMLHead(n_inputs=4, depth=2)
+        with pytest.raises(ValueError, match="calibration_data is required"):
+            head.prune(threshold=0.1)
 
     def test_full_pipeline(self):
         """End-to-end: train -> prune -> snap -> symbolic."""

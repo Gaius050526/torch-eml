@@ -1,7 +1,10 @@
 """LLM trunk + EML head for startup scoring (uses mock data, no API key needed)."""
 
+import logging
 import torch
 from torch_eml import EMLHead
+
+logging.basicConfig(level=logging.INFO)
 
 # In a real scenario, you'd use:
 #   from torch_eml.trunk import LLMTrunk

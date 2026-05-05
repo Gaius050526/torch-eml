@@ -16,6 +16,11 @@ class EMLTree(nn.Module):
         super().__init__()
         if depth < 1:
             raise ValueError("depth must be >= 1")
+        if depth > 10:
+            raise ValueError(
+                f"depth={depth} would create {2**depth - 1} nodes. "
+                f"Maximum depth is 10 (1023 nodes)."
+            )
         self.depth = depth
         self.n_leaves = 2 ** depth
         n_nodes = 2 ** depth - 1
@@ -51,3 +56,6 @@ class EMLTree(nn.Module):
             current_level = next_level
 
         return current_level[0].unsqueeze(-1)
+
+    def __repr__(self) -> str:
+        return f"EMLTree(depth={self.depth}, nodes={len(self.nodes)}, leaves={self.n_leaves})"

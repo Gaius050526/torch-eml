@@ -86,3 +86,12 @@ class TestEMLNodeStability:
         y = torch.tensor([1.0, 1.0])
         out = node(x, y)
         assert not torch.isnan(out).any()
+        assert not torch.isinf(out).any()
+
+    def test_large_negative_x(self):
+        node = EMLNode()
+        x = torch.tensor([-100.0, -200.0])
+        y = torch.tensor([1.0, 1.0])
+        out = node(x, y)
+        assert not torch.isnan(out).any()
+        assert not torch.isinf(out).any()

@@ -1,8 +1,11 @@
 """Replace an MLP head with an EML head for interpretable classification."""
 
+import logging
 import torch
 import torch.nn as nn
 from torch_eml import EMLHead
+
+logging.basicConfig(level=logging.INFO)
 
 # Simple MLP trunk (pretend this is a pretrained feature extractor)
 class MLPTrunk(nn.Module):

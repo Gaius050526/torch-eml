@@ -92,8 +92,21 @@ class EMLHead(nn.Module):
         threshold: float = 0.01,
         calibration_data: torch.Tensor | None = None,
     ) -> PruneReport:
-        """Prune low-contribution branches from the tree."""
-        if calibration_data is not None:
-            with torch.no_grad():
-                calibration_data = self.projection(calibration_data)
+        """Prune low-contribution branches from the tree.
+
+        Args:
+            threshold: Maximum allowed output change per node.
+            calibration_data: Tensor of shape [n_samples, n_inputs]. Required.
+        """
+        if calibration_data is None:
+            raise ValueError("calibration_data is required for pruning")
+        with torch.no_grad():
+            calibration_data = self.projection(calibration_data)
         return prune(self.tree, threshold=threshold, calibration_data=calibration_data)
+
+    def __repr__(self) -> str:
+        return (
+            f"EMLHead(n_inputs={self.projection.in_features}, "
+            f"depth={self.tree.depth}, "
+            f"params={sum(p.numel() for p in self.parameters())})"
+        )

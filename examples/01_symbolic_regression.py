@@ -1,7 +1,10 @@
 """Discover y = sin(x) from data using an EML head."""
 
+import logging
 import torch
 from torch_eml import EMLHead
+
+logging.basicConfig(level=logging.INFO)
 
 # Generate training data
 torch.manual_seed(42)

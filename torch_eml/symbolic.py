@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Sequence
@@ -8,6 +9,8 @@ import sympy
 import torch
 
 from torch_eml.tree import EMLTree
+
+logger = logging.getLogger(__name__)
 
 
 SNAP_TARGETS: dict[float, str] = {
@@ -51,13 +54,20 @@ class SymbolicExpression:
 
     @property
     def python(self) -> str:
+        code = sympy.printing.pycode(self._expr)
         lines = [
             "import math",
             "",
             f"def f({', '.join(self._input_names)}):",
-            f"    return {self.string}",
+            f"    return {code}",
         ]
         return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        s = self.string
+        if len(s) > 60:
+            s = s[:57] + "..."
+        return f"SymbolicExpression({s})"
 
 
 def _node_to_sympy(
@@ -157,10 +167,8 @@ def snap(
                         [(abs(val - t), t, label) for t, label in SNAP_TARGETS.items()],
                         key=lambda c: c[0],
                     )[:3]
-                    print(f"  {param_name}={val:.6f}  candidates: ", end="")
-                    for dist, target, label in candidates:
-                        print(f"{label}({target:.4f}, d={dist:.4f}) ", end="")
-                    print()
+                    parts = [f"{label}({target:.4f}, d={dist:.4f})" for dist, target, label in candidates]
+                    logger.info(f"  {param_name}={val:.6f}  candidates: {' '.join(parts)}")
 
                 snapped, label = snap_value(val, tolerance)
                 if label is not None:
@@ -172,11 +180,11 @@ def snap(
         with torch.no_grad():
             pred = tree(X)
             post_loss = torch.nn.functional.mse_loss(pred, y).item()
-        print(
+        logger.info(
             f"Snapped {snapped_count}/{total_count} weights. "
             f"Loss: {pre_loss:.6f} -> {post_loss:.6f}"
         )
     else:
-        print(f"Snapped {snapped_count}/{total_count} weights.")
+        logger.info(f"Snapped {snapped_count}/{total_count} weights.")
 
     return to_symbolic(tree, input_names=input_names)
