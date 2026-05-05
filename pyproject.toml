@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torch-eml"
+version = "0.1.0"
+description = "EML (Exp-Minus-Log) tree heads for interpretable neuro-symbolic models"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    {name = "Lee Mosbacker"},
+]
+keywords = ["pytorch", "symbolic-regression", "interpretable-ml", "neuro-symbolic", "eml"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0",
+    "sympy",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic"]
+openai = ["openai"]
+dev = ["pytest", "pytest-cov"]
+all = ["anthropic", "openai", "pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/leemosbacker/torch-eml"
+Repository = "https://github.com/leemosbacker/torch-eml"
+
+[tool.setuptools.packages.find]
+include = ["torch_eml*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
