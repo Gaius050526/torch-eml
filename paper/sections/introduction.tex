@@ -68,7 +68,7 @@ The \textsc{ComposeHead} represents candidate solutions as trainable linear
 combinations of \emph{separable terms}, where each term is a product of
 axis-aligned primitive applications:
 \begin{equation}
-  \label{eq:composehead}
+  \label{eq:composehead-intro}
   \hat{u}(\mathbf{x}) \;=\; \sum_{k=1}^{K} c_k \prod_{d=1}^{D}
     f_{k,d}\!\bigl(\alpha_{k,d}\, x_d + \beta_{k,d}\bigr),
 \end{equation}
@@ -95,7 +95,7 @@ verified independently against the governing PDE.
 \paragraph{Scope and limitations.}
 We emphasize that the method proposed here is best understood as
 \emph{symbolic regression specialized to PDE solutions}, not as a general PDE
-solver.  The separable ansatz in Equation~\eqref{eq:composehead} is expressive
+solver.  The separable ansatz in Equation~\eqref{eq:composehead-intro} is expressive
 for the broad class of problems whose analytical solutions factor across
 coordinate dimensions, but it does not address existence, uniqueness, or
 regularity questions, nor does it replace mesh-based solvers for problems
