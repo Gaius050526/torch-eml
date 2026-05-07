@@ -1,0 +1,212 @@
+\section{Discussion}
+\label{sec:discussion}
+
+The experiments presented in Section~\ref{sec:experiments} demonstrate that the
+\textsc{ComposeHead} architecture can recover exact closed-form solutions to the
+two-dimensional Navier--Stokes equations from data.  In this section we examine
+the scope of this capability, its relationship to existing work, and the
+limitations that constrain its present applicability.
+
+\paragraph{What the method can do.}
+The method discovers closed-form PDE solutions whenever the true solution lies
+within the span of the EML primitive basis---that is, when it can be expressed
+as a linear combination of products of $\sin$, $\cos$, $\exp$, $\ln$, and the
+identity function applied along individual coordinate axes.  This class
+encompasses a substantial fraction of the analytical solutions catalogued in
+classical references: separable solutions to the heat, wave, and
+advection--diffusion equations; Fourier modes of elliptic boundary-value
+problems; and exponentially decaying vortex solutions of the Navier--Stokes
+equations, among others.  The method is particularly effective for separable
+solutions, where the product-of-univariates structure of the
+ansatz~\eqref{eq:composehead} aligns exactly with the form of the target
+expression.
+
+\paragraph{What the method cannot do.}
+Equally important are the boundaries of the approach.  The \textsc{ComposeHead}
+does not prove existence or regularity of solutions in the PDE-theoretic
+sense.  It does not address uniqueness, nor does it provide any guarantee that
+a discovered solution is the physically relevant one among potentially many
+solutions to the same equations.  Turbulent flows, whose velocity fields lack
+any known closed-form representation, lie entirely outside the method's reach.
+More generally, any solution that cannot be expressed as a finite linear
+combination of separable products of the available primitives is
+undiscoverable: the architecture can only find what its basis can represent.
+Finally, the method is data-driven and requires training data---obtained from
+simulation, experiment, or collocation-point sampling---to guide the
+optimization.
+
+\paragraph{Relationship to the Navier--Stokes Millennium Prize.}
+The recovery of the Taylor--Green vortex solution naturally raises the question
+of how this work relates to the Clay Mathematics Institute Millennium Prize
+Problem concerning the Navier--Stokes equations.  We wish to be precise on this
+point.  The Millennium Prize requires proving, for the three-dimensional
+incompressible Navier--Stokes equations, that smooth solutions exist globally in
+time for arbitrary smooth initial data of finite energy, or exhibiting a
+counterexample.  Our work addresses a fundamentally different question: given
+specific initial conditions, can one algorithmically discover an explicit
+closed-form expression that satisfies the equations?  The result is a
+\emph{constructive existence demonstration} for a particular initial datum---we
+exhibit the solution rather than proving that one must exist.  This is distinct
+from, and considerably weaker than, the general existence and smoothness claim
+demanded by the Millennium Prize.  Nonetheless, the ability to algorithmically
+discover closed-form solutions for families of initial conditions may inform
+theoretical investigations by providing a growing library of exact solutions
+whose analytic properties can be studied directly.
+
+\paragraph{Comparison to symbolic regression.}
+PySR~\cite{cranmer2023} and AI~Feynman~\cite{udrescu2020} search over arbitrary
+expression trees using genetic programming and physics-inspired decomposition
+strategies, respectively.  These methods are strictly more general than ours:
+they can discover algebraic relationships of essentially any form, subject to
+computational budget.  Our approach trades this generality for structure.  By
+constraining the search to a physically motivated basis of axis-aligned
+separable terms, we exploit the observation that PDE solutions are
+overwhelmingly products of elementary functions of individual variables.  This
+narrower search space yields two practical advantages.  First, the optimization
+landscape is better conditioned: the number of free parameters scales linearly
+in the number of terms rather than exponentially in expression depth.  Second,
+the separable structure makes the discovery of multi-variable solutions
+tractable, whereas generic symbolic regression must search over an
+exponentially larger space of nested compositions.  The trade-off is that
+arbitrary algebraic relationships---such as $E = mc^{2}$ or other non-separable
+laws---fall outside the ansatz.
+
+\paragraph{The role of normalization.}
+The parameterization $c_k \cdot f(\alpha_{k,d}\, x_d + \beta_{k,d})$ admits
+gauge freedom: multiple parameter settings can encode the same function.  For
+example, $\sin(x - \pi) \cdot \exp(b) \cdot c = \sin(x) \cdot c'$ where
+$c' = -\exp(b) \cdot c$, because $\sin(x - \pi) = -\sin(x)$.  Similarly, a
+cosine with a phase offset of $\pi/2$ is a sine, and exponential biases can be
+absorbed into multiplicative coefficients.  Without normalization, gradient-based
+optimization converges to one of many equivalent parameter settings, and
+coefficient snapping---which relies on the learned parameters being close to
+canonical values---fails.  The normalization pipeline described in
+Section~\ref{sec:method} resolves this gauge freedom by absorbing exponential
+biases into the linear coefficients~$c_k$, canonicalizing trigonometric phases
+using the identities $\sin(x + \pi/2) = \cos(x)$ and $\cos(x + \pi) =
+-\cos(x)$, and reducing all phase offsets to the interval $[0, \pi/2)$.  This
+canonicalization is essential: it is what transforms a continuously
+parameterized model into an expression that coefficient snapping can convert to
+exact symbolic form.
+
+\paragraph{Limitations.}
+We summarize the principal limitations of the current method.
+\begin{itemize}
+  \item \emph{Data dependence.}  The method requires training data, whether from
+    numerical simulation, physical experiment, or dense collocation-point
+    sampling.  It cannot discover solutions from the PDE alone without some form
+    of supervision.
+
+  \item \emph{Separability assumption.}  The axis-aligned separable
+    ansatz~\eqref{eq:composehead} cannot represent non-separable solutions.
+    Self-similar solutions of the form $u(x,t) = t^{-\alpha} g(x/t^{\beta})$,
+    traveling-wave solutions $u(x,t) = f(x - ct)$, and other structures in which
+    the variables are coupled through a shared argument lie outside the current
+    hypothesis class.
+
+  \item \emph{Combinatorial scaling.}  The number of candidate terms scales as
+    $|\mathcal{F}|^{K} \times D^{K}$ for $K$-factor products drawn from a
+    primitive library~$\mathcal{F}$ over $D$ coordinate dimensions.  While this
+    is far smaller than the space of arbitrary expression trees, it remains
+    exponential in $K$ and may become prohibitive for high-dimensional problems
+    or large primitive libraries.
+
+  \item \emph{Dimensionality.}  The experiments presented here are restricted to
+    two spatial dimensions plus time.  Extension to three-dimensional
+    problems is conceptually straightforward but has not yet been validated.
+
+  \item \emph{Basis completeness.}  The primitive library must contain the
+    functions appearing in the true solution.  If the solution involves a
+    function not in the basis---for instance, a Bessel function or an elliptic
+    integral---the method cannot discover it, regardless of the quality or
+    quantity of training data.
+\end{itemize}
+
+
+\section{Future Work}
+\label{sec:future}
+
+Several directions extend the framework presented in this paper.
+
+\paragraph{Three-dimensional Navier--Stokes solutions.}
+The most immediate extension is to three spatial dimensions.  A number of exact
+solutions to the 3D incompressible Navier--Stokes equations are known, including
+Beltrami flows and the Arnold--Beltrami--Childress (ABC) flow, whose velocity
+fields are separable products of trigonometric functions in $x$, $y$, and $z$.
+These solutions lie squarely within the hypothesis class of the
+\textsc{ComposeHead} and would provide a direct test of the method's scalability
+to higher-dimensional domains.
+
+\paragraph{Physics-informed discovery without training data.}
+In the present work, the \textsc{ComposeHead} is trained on data generated by a
+known analytical solution.  A natural next step is to eliminate the data
+requirement entirely and train using only the PDE residual loss, boundary
+conditions, and initial conditions---in the spirit of physics-informed neural
+networks but with a symbolic rather than neural ansatz.  This would transform
+the method from a symbolic regression tool into a genuine symbolic PDE solver.
+
+\paragraph{Non-separable and nested compositions.}
+The separability assumption is the most restrictive aspect of the current
+framework.  Two strategies may extend the method to non-separable solutions:
+(i)~introducing mixed terms of the form $f(a x + b y)$, which allow coupling
+between coordinate variables, and (ii)~permitting nested compositions such as
+$f \circ g$ within each axis-aligned factor.  Both extensions enlarge the
+hypothesis class at the cost of increased combinatorial complexity, and
+principled strategies for managing this trade-off remain to be developed.
+
+\paragraph{Automated basis selection.}
+Currently, the primitive library is specified manually.  An adaptive approach
+that begins with a small library and progressively introduces additional
+primitives based on residual analysis could reduce the combinatorial burden for
+problems where the relevant function class is unknown a priori.
+
+\paragraph{Scaling to higher-dimensional PDEs.}
+PDEs arising in kinetic theory, finance, and quantum mechanics may involve five
+or more independent variables.  The exponential scaling of the candidate term
+count with dimensionality demands algorithmic innovations---sparsity-promoting
+regularization, hierarchical decomposition, or greedy term selection---to remain
+tractable.
+
+\paragraph{Integration with existing PDE solver libraries.}
+The \textsc{ComposeHead} could serve as a post-processing module for existing
+numerical solvers, accepting high-fidelity simulation data as input and
+returning symbolic expressions as output.  Hybrid workflows that alternate
+between numerical solution and symbolic identification may prove especially
+effective for parameter studies, where an analytical expression discovered at one
+parameter value can seed the search at nearby values.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented the \textsc{ComposeHead}, an architecture for discovering
+closed-form solutions to partial differential equations using verified primitive
+functions constructed from the EML universal basis.  The key architectural
+innovation---axis-aligned separable terms composed of trainable affine
+transformations of elementary functions---makes product-of-univariates solutions
+directly discoverable by gradient-based optimization, reducing the symbolic
+regression problem from an exponentially large search over expression trees to a
+structured optimization over a small number of scalar parameters.
+
+We demonstrated the method on the two-dimensional incompressible Navier--Stokes
+equations, where it recovered the Taylor--Green vortex solution
+$u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
+at machine precision, achieving pointwise errors below $10^{-6}$ after
+normalization and coefficient snapping.  The resulting expressions are not
+neural-network approximations but genuine symbolic formulas: they can be
+analytically differentiated, substituted into the governing equations, and
+verified to satisfy the Navier--Stokes system exactly.
+
+We release \texttt{torch-eml} as an open-source PyTorch library at
+\url{https://github.com/gaius050526/torch-eml}, providing verified EML
+primitive implementations, the \textsc{ComposeHead} architecture, and the
+normalization and snapping pipeline described in this work.
+
+While the current method is limited to separable solutions in two spatial
+dimensions and requires the primitive basis to contain the relevant functions,
+the framework establishes a foundation for symbolic PDE solving that occupies a
+distinctive position between neural solvers and classical analytical methods.
+Neural solvers offer generality at the cost of interpretability; analytical
+methods offer exactness but require human ingenuity.  The approach presented
+here automates the discovery of exact, interpretable solutions within a
+structured function class, bridging the gap between these two paradigms.

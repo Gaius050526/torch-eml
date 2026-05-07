@@ -1,0 +1,235 @@
+% Appendix A — Algebraic Proofs of EML Primitive Constructions
+% Paper: "Closed-Form Discovery of PDE Solutions via Compositional EML Primitives"
+
+\section{Algebraic Proofs of EML Primitive Constructions}
+\label{appendix:algebraic-proofs}
+
+Throughout this appendix, we denote the base EML function as
+\begin{equation}
+    \mathrm{eml}(x, y) \;=\; \exp(x) - \ln(y),
+\end{equation}
+where $\exp$ and $\ln$ carry their standard definitions over $\mathbb{R}$ (and, where noted, their principal-branch extensions over $\mathbb{C}$).  We prove that each elementary primitive required by our compositional framework can be recovered from finitely many nested applications of $\mathrm{eml}$.
+
+%% ---------------------------------------------------------------
+%% A.1  Exponential
+%% ---------------------------------------------------------------
+\subsection{Exponential}
+\label{sec:proof-exp}
+
+\begin{proposition}
+For all $x \in \mathbb{R}$,
+\[
+    \exp(x) \;=\; \mathrm{eml}(x,\, 1).
+\]
+\end{proposition}
+
+\begin{proof}
+By direct substitution into the definition,
+\[
+    \mathrm{eml}(x,\, 1)
+    \;=\; \exp(x) - \ln(1)
+    \;=\; \exp(x) - 0
+    \;=\; \exp(x). \qedhere
+\]
+\end{proof}
+
+%% ---------------------------------------------------------------
+%% A.2  Natural Logarithm
+%% ---------------------------------------------------------------
+\subsection{Natural Logarithm}
+\label{sec:proof-ln}
+
+\begin{proposition}
+For all $z > 0$,
+\[
+    \ln(z) \;=\; \mathrm{eml}\!\Big(1,\;\mathrm{eml}\!\big(\mathrm{eml}(1,\, z),\; 1\big)\Big).
+\]
+The construction has depth three in nested EML operations.
+\end{proposition}
+
+\begin{proof}
+We evaluate the expression from the innermost call outward.
+
+\medskip
+\noindent\textit{Step 1.}  Compute the innermost application:
+\[
+    \mathrm{eml}(1,\, z) \;=\; \exp(1) - \ln(z) \;=\; e - \ln(z).
+\]
+
+\noindent\textit{Step 2.}  Substitute the result of Step~1 into the second position:
+\[
+    \mathrm{eml}\!\big(e - \ln(z),\; 1\big)
+    \;=\; \exp\!\big(e - \ln(z)\big) - \ln(1)
+    \;=\; \exp\!\big(e - \ln(z)\big).
+\]
+
+\noindent\textit{Step 3.}  Apply the outermost call:
+\[
+    \mathrm{eml}\!\Big(1,\; \exp\!\big(e - \ln(z)\big)\Big)
+    \;=\; \exp(1) - \ln\!\Big(\exp\!\big(e - \ln(z)\big)\Big)
+    \;=\; e - \big(e - \ln(z)\big)
+    \;=\; \ln(z).
+\]
+The penultimate equality uses the identity $\ln(\exp(u)) = u$ for $u \in \mathbb{R}$.
+\end{proof}
+
+%% ---------------------------------------------------------------
+%% A.3  Sine (Complex Extension)
+%% ---------------------------------------------------------------
+\subsection{Sine (via Complex Extension)}
+\label{sec:proof-sin}
+
+\begin{proposition}
+For all $x \in \mathbb{R}$,
+\[
+    \sin(x) \;=\; \operatorname{Im}\!\big(\mathrm{eml}(ix,\, 1)\big),
+\]
+where $i = \sqrt{-1}$ and $\mathrm{eml}$ is extended to complex arguments by employing the standard complex exponential and the principal branch of the complex logarithm.
+\end{proposition}
+
+\begin{proof}
+By definition,
+\[
+    \mathrm{eml}(ix,\, 1)
+    \;=\; \exp(ix) - \ln(1)
+    \;=\; \exp(ix).
+\]
+Euler's formula gives $\exp(ix) = \cos(x) + i\sin(x)$.  Taking the imaginary part yields
+\[
+    \operatorname{Im}\!\big(\mathrm{eml}(ix,\, 1)\big)
+    \;=\; \operatorname{Im}\!\big(\cos(x) + i\sin(x)\big)
+    \;=\; \sin(x). \qedhere
+\]
+\end{proof}
+
+\begin{remark}
+The extension of $\mathrm{eml}$ to complex arguments is well-defined: $\exp\colon \mathbb{C} \to \mathbb{C}\setminus\{0\}$ is entire, and $\ln$ is holomorphic on $\mathbb{C}\setminus(-\infty, 0]$ under its principal branch.  Since the constructions in Propositions~A.3 and~A.4 evaluate $\ln$ only at $y=1$, no branch-cut ambiguities arise.
+\end{remark}
+
+%% ---------------------------------------------------------------
+%% A.4  Cosine (Complex Extension)
+%% ---------------------------------------------------------------
+\subsection{Cosine (via Complex Extension)}
+\label{sec:proof-cos}
+
+\begin{proposition}
+For all $x \in \mathbb{R}$,
+\[
+    \cos(x) \;=\; \operatorname{Re}\!\big(\mathrm{eml}(ix,\, 1)\big).
+\]
+\end{proposition}
+
+\begin{proof}
+By the same reduction as in Proposition~A.3,
+\[
+    \operatorname{Re}\!\big(\mathrm{eml}(ix,\, 1)\big)
+    \;=\; \operatorname{Re}\!\big(\exp(ix)\big)
+    \;=\; \operatorname{Re}\!\big(\cos(x) + i\sin(x)\big)
+    \;=\; \cos(x). \qedhere
+\]
+\end{proof}
+
+%% ---------------------------------------------------------------
+%% A.5  Pi
+%% ---------------------------------------------------------------
+\subsection{Pi}
+\label{sec:proof-pi}
+
+\begin{proposition}
+The constant $\pi$ is recoverable from EML as
+\[
+    \pi \;=\; \operatorname{Im}\!\Big(\mathrm{eml}\!\Big(1,\;\mathrm{eml}\!\big(\mathrm{eml}(1,\, -1),\; 1\big)\Big)\Big).
+\]
+\end{proposition}
+
+\begin{proof}
+We evaluate the nested expression under the complex extension of $\mathrm{eml}$, using the principal branch $\ln(-1) = i\pi$.
+
+\medskip
+\noindent\textit{Step 1.}  Innermost application:
+\[
+    \mathrm{eml}(1,\, -1)
+    \;=\; \exp(1) - \ln(-1)
+    \;=\; e - i\pi.
+\]
+
+\noindent\textit{Step 2.}  Intermediate application:
+\[
+    \mathrm{eml}(e - i\pi,\; 1)
+    \;=\; \exp(e - i\pi) - \ln(1)
+    \;=\; \exp(e - i\pi).
+\]
+
+\noindent\textit{Step 3.}  Outermost application:
+\[
+    \mathrm{eml}\!\Big(1,\; \exp(e - i\pi)\Big)
+    \;=\; \exp(1) - \ln\!\Big(\exp(e - i\pi)\Big)
+    \;=\; e - (e - i\pi)
+    \;=\; i\pi.
+\]
+
+Taking the imaginary part gives $\operatorname{Im}(i\pi) = \pi$.
+\end{proof}
+
+\begin{remark}
+Observe that the algebraic structure of this construction is identical to that of Proposition~A.2 (the logarithm), instantiated at $z = -1$.  The result $\ln(-1) = i\pi$ then isolates $\pi$ as an imaginary part.
+\end{remark}
+
+%% ---------------------------------------------------------------
+%% A.6  Differentiation Closure
+%% ---------------------------------------------------------------
+\subsection{Differentiation Closure}
+\label{sec:proof-diff-closure}
+
+\begin{proposition}
+The class of functions expressible as finite compositions of $\mathrm{eml}$ is closed under partial differentiation with respect to either argument.
+\end{proposition}
+
+\begin{proof}
+We compute the partial derivatives of $\mathrm{eml}$ directly:
+\begin{align}
+    \frac{\partial}{\partial x}\,\mathrm{eml}(x,\, y)
+    &\;=\; \frac{\partial}{\partial x}\big[\exp(x) - \ln(y)\big]
+    \;=\; \exp(x), \label{eq:deml-dx} \\[4pt]
+    \frac{\partial}{\partial y}\,\mathrm{eml}(x,\, y)
+    &\;=\; \frac{\partial}{\partial y}\big[\exp(x) - \ln(y)\big]
+    \;=\; -\frac{1}{y}. \label{eq:deml-dy}
+\end{align}
+
+It remains to show that both $\exp(x)$ and $-1/y$ lie within the EML function class.
+
+\begin{enumerate}
+    \item \textbf{Exponential.}  By Proposition~A.1, $\exp(x) = \mathrm{eml}(x, 1)$.
+
+    \item \textbf{Negated reciprocal.}  We note that $-1/y$ can be obtained by composing EML primitives with elementary arithmetic operations (addition, subtraction, and scalar multiplication) that are themselves constructible from EML.\@ Specifically, $1/y = \exp(-\ln(y))$, and both $\exp$ and $\ln$ are available by Propositions~A.1 and~A.2.  Negation follows from $-u = \mathrm{eml}(0, \mathrm{eml}(u, 1)) - 1$, since $\mathrm{eml}(0, \mathrm{eml}(u, 1)) = \exp(0) - \ln(\exp(u)) = 1 - u$.
+\end{enumerate}
+
+Since partial differentiation of an EML expression produces functions that remain within the EML class, arbitrary compositions of $\mathrm{eml}$ are closed under differentiation by the chain rule.  This closure property is essential for physics-informed applications in which the network must represent both a solution $u$ and its partial derivatives $\partial_t u$, $\partial_x u$, $\partial_{xx} u$, etc., within the same function class.
+\end{proof}
+
+%% ---------------------------------------------------------------
+%% A.7  Numerical Verification
+%% ---------------------------------------------------------------
+\subsection{Numerical Verification}
+\label{sec:numerical-verification}
+
+All constructions presented in Sections~A.1--A.6 are numerically verified in the \texttt{torch-eml} library.  The function \texttt{verify\_constructions()} evaluates each EML composition and compares the result against the corresponding PyTorch reference implementation (\texttt{torch.exp}, \texttt{torch.log}, \texttt{torch.sin}, \texttt{torch.cos}, and \texttt{torch.tensor(math.pi)}).
+
+\begin{table}[h]
+\centering
+\caption{Numerical verification of EML primitive constructions.  All absolute errors are measured against PyTorch reference values at test points $x \in \{0.5,\; 1.0,\; 2.0,\; 3.14159\}$.}
+\label{tab:verification}
+\begin{tabular}{lll}
+\toprule
+\textbf{Primitive} & \textbf{EML Construction} & \textbf{Max Abs.\ Error} \\
+\midrule
+$\exp(x)$ & $\mathrm{eml}(x, 1)$ & $< 10^{-7}$ \\
+$\ln(z)$  & $\mathrm{eml}(1,\, \mathrm{eml}(\mathrm{eml}(1, z), 1))$ & $< 10^{-5}$ \\
+$\sin(x)$ & $\operatorname{Im}(\mathrm{eml}(ix, 1))$ & $< 10^{-7}$ \\
+$\cos(x)$ & $\operatorname{Re}(\mathrm{eml}(ix, 1))$ & $< 10^{-7}$ \\
+$\pi$     & $\operatorname{Im}(\mathrm{eml}(1, \mathrm{eml}(\mathrm{eml}(1, -1), 1)))$ & $< 10^{-7}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The maximum error across all constructions and all test points is bounded by $10^{-5}$.  The slightly elevated error for the logarithm construction reflects the accumulation of floating-point rounding across three nested EML evaluations, each involving an exponentiation step.  All errors remain well within tolerances acceptable for both training and evaluation of physics-informed neural surrogates.

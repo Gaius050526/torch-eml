@@ -19,17 +19,32 @@ SNAP_TARGETS: dict[float, str] = {
     -1.0: "-1",
     2.0: "2",
     -2.0: "-2",
+    3.0: "3",
+    -3.0: "-3",
     0.5: "1/2",
     -0.5: "-1/2",
-    math.pi: "pi",
-    -math.pi: "-pi",
-    math.e: "e",
-    -math.e: "-e",
     1 / 3: "1/3",
     -1 / 3: "-1/3",
     2 / 3: "2/3",
+    -2 / 3: "-2/3",
+    0.25: "1/4",
+    -0.25: "-1/4",
+    0.2: "1/5",
+    -0.2: "-1/5",
+    1.5: "3/2",
+    -1.5: "-3/2",
+    math.pi: "pi",
+    -math.pi: "-pi",
+    math.pi / 2: "pi/2",
+    -math.pi / 2: "-pi/2",
+    math.pi / 4: "pi/4",
+    -math.pi / 4: "-pi/4",
+    math.e: "e",
+    -math.e: "-e",
     math.sqrt(2): "sqrt(2)",
+    -math.sqrt(2): "-sqrt(2)",
     math.log(2): "ln(2)",
+    -math.log(2): "-ln(2)",
 }
 
 
@@ -143,9 +158,24 @@ def snap(
     validation_data: tuple[torch.Tensor, torch.Tensor] | None = None,
     interactive: bool = False,
     input_names: Sequence[str] | None = None,
+    max_loss_ratio: float = 2.0,
 ) -> SymbolicExpression:
-    """Snap tree weights to clean values and return symbolic expression."""
+    """Snap tree weights to clean values and return symbolic expression.
+
+    When validation_data is provided, each weight is snapped individually
+    and reverted if the loss increases beyond max_loss_ratio times the
+    pre-snap loss. This prevents cascading blowup in nested exp() chains.
+
+    Args:
+        tree: The EMLTree to snap.
+        tolerance: Maximum distance to snap target.
+        validation_data: Optional (X, y) tuple for loss-aware snapping.
+        interactive: Log snap candidates for each weight.
+        input_names: Names for leaf inputs in the symbolic expression.
+        max_loss_ratio: Maximum allowed loss increase ratio (default 2.0).
+    """
     pre_loss = None
+    X, y = None, None
     if validation_data is not None:
         X, y = validation_data
         with torch.no_grad():
@@ -153,7 +183,10 @@ def snap(
             pre_loss = torch.nn.functional.mse_loss(pred, y).item()
 
     snapped_count = 0
+    reverted_count = 0
     total_count = 0
+    # Track the running loss threshold — each accepted snap updates it
+    current_max_loss = pre_loss * max_loss_ratio if pre_loss is not None else None
 
     with torch.no_grad():
         for node in tree.nodes:
@@ -173,15 +206,23 @@ def snap(
                 snapped, label = snap_value(val, tolerance)
                 if label is not None:
                     param.fill_(snapped)
+
+                    # Check if this snap blows up the loss
+                    if current_max_loss is not None:
+                        new_loss = torch.nn.functional.mse_loss(tree(X), y).item()
+                        if not math.isfinite(new_loss) or new_loss > current_max_loss:
+                            param.fill_(val)  # revert
+                            reverted_count += 1
+                            continue
+
                     snapped_count += 1
 
     if validation_data is not None:
-        X, y = validation_data
         with torch.no_grad():
-            pred = tree(X)
-            post_loss = torch.nn.functional.mse_loss(pred, y).item()
+            post_loss = torch.nn.functional.mse_loss(tree(X), y).item()
         logger.info(
-            f"Snapped {snapped_count}/{total_count} weights. "
+            f"Snapped {snapped_count}/{total_count} weights "
+            f"({reverted_count} reverted). "
             f"Loss: {pre_loss:.6f} -> {post_loss:.6f}"
         )
     else:

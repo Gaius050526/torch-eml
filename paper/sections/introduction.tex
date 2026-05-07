@@ -1,0 +1,141 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Partial differential equations govern phenomena across fluid dynamics, quantum
+mechanics, and continuum mechanics, yet obtaining analytical solutions remains
+one of the most difficult tasks in applied mathematics.  When closed-form
+solutions do exist, they provide qualitative insight, asymptotic guarantees,
+and computational efficiency that no numerical approximation can match.
+The recent success of deep-learning-based PDE solvers has dramatically
+expanded the class of problems that can be tackled computationally, but it has
+done so at the cost of interpretability: a trained physics-informed neural
+network (PINN)~\cite{raissi2019} produces a set of floating-point weights from
+which no human-readable formula can be extracted.
+
+\paragraph{Neural PDE solvers: accuracy without insight.}
+PINNs and their descendants embed the governing PDE into the loss function of a
+neural network and optimize over the network parameters so that the learned
+map approximately satisfies the differential equation together with its
+boundary and initial conditions.  This paradigm is flexible---it requires
+neither a mesh nor a specialized numerical scheme---and has yielded
+impressive results on forward and inverse problems alike.  However, the output
+of such a solver is an opaque parameterization: one obtains a weight matrix,
+not a formula.  Post-hoc interpretability techniques can highlight which input
+regions matter, but they cannot recover the symbolic structure that a
+mathematician would recognize as a solution.
+
+\paragraph{Symbolic regression: powerful but limited in scope.}
+An alternative line of work seeks to discover symbolic expressions directly from
+data.  Tools such as PySR~\cite{cranmer2023} and AI~Feynman~\cite{udrescu2020}
+have achieved striking success on algebraic physical laws---rediscovering
+conservation laws, constitutive relations, and dimensionless
+groupings from noisy measurements.  These methods search over a grammar of
+elementary operations and fit scalar expressions of moderate complexity.
+Yet PDE solutions pose a qualitatively different challenge.  A typical
+analytical solution is not a single algebraic expression in one variable but a
+\emph{product of functions of different variables}---for instance,
+$\sin(x)\cos(y)\exp(-\nu t)$---and the combinatorial explosion of
+multi-variable compositions quickly overwhelms generic symbolic regression
+engines.
+
+\paragraph{The EML function as a universal basis.}
+Odrzywo{\l}ek~\cite{odrzywołek2026} recently proved that the two-argument function
+\begin{equation}
+  \label{eq:eml}
+  \mathrm{eml}(x,y) \;=\; e^{x} - \ln y
+\end{equation}
+is \emph{universal}: every computable function can be represented as a finite
+composition of $\mathrm{eml}$ with itself.  This result is striking because it
+reduces the space of all computable functions to a single primitive operation,
+in contrast to the multi-operation libraries assumed by conventional symbolic
+regression.  In principle, one could search over EML expression trees to
+discover any target function.  In practice, however, the raw EML representation
+is unwieldy.  Multiplication alone---$x \cdot y$---requires a reverse-Polish
+representation of length~41 when expanded purely in terms of $\mathrm{eml}$.
+Directly optimizing over such trees is computationally intractable for
+expressions of the complexity encountered in PDE solutions.
+
+\paragraph{Our approach: verified primitives and compositional search.}
+The key observation underlying our method is that one need not optimize at the
+level of raw EML trees.  Instead, we first derive \emph{verified constructions}
+of the standard elementary functions---$\exp$, $\ln$, $\sin$, $\cos$---from
+the base EML operation using algebraic identities.  Each construction is
+validated symbolically so that it reproduces the target function exactly.
+These verified primitives then serve as differentiable building blocks in a
+higher-level architecture we call the \textsc{ComposeHead}.
+
+The \textsc{ComposeHead} represents candidate solutions as trainable linear
+combinations of \emph{separable terms}, where each term is a product of
+axis-aligned primitive applications:
+\begin{equation}
+  \label{eq:composehead}
+  \hat{u}(\mathbf{x}) \;=\; \sum_{k=1}^{K} c_k \prod_{d=1}^{D}
+    f_{k,d}\!\bigl(\alpha_{k,d}\, x_d + \beta_{k,d}\bigr),
+\end{equation}
+with each factor $f_{k,d}$ drawn from the primitive library
+$\{\sin,\cos,\exp,\ln,\mathrm{id}\}$ and each $\alpha_{k,d}$, $\beta_{k,d}$,
+$c_k$ a trainable scalar coefficient.  This separable structure directly
+mirrors the form of most known analytical PDE solutions, in which each spatial
+or temporal variable appears inside its own elementary function.  The
+optimization problem thus reduces from ``find 60 arbitrary neural-network
+weights'' to ``identify which functions compose, with what coefficients.''
+
+\paragraph{From learned parameters to exact symbolic expressions.}
+After training, the learned coefficients are real-valued and carry the
+accumulated artifacts of gradient-based optimization---arbitrary phase offsets in
+trigonometric terms, exponential biases absorbed into multiplicative constants,
+and small numerical residuals.  We introduce a \emph{normalization and snapping}
+pipeline that (i)~absorbs exponential biases into the linear coefficients~$c_k$,
+(ii)~canonicalizes trigonometric phases by exploiting the identities
+$\sin(x + \pi/2) = \cos(x)$ and $\cos(x + \pi) = -\cos(x)$, and
+(iii)~rounds the resulting coefficients to nearby rational or otherwise
+recognizable values.  The output is a clean symbolic expression that can be
+verified independently against the governing PDE.
+
+\paragraph{Scope and limitations.}
+We emphasize that the method proposed here is best understood as
+\emph{symbolic regression specialized to PDE solutions}, not as a general PDE
+solver.  The separable ansatz in Equation~\eqref{eq:composehead} is expressive
+for the broad class of problems whose analytical solutions factor across
+coordinate dimensions, but it does not address existence, uniqueness, or
+regularity questions, nor does it replace mesh-based solvers for problems
+lacking closed-form solutions.  Our claims are accordingly conservative: we
+demonstrate that, when an analytical solution exists and has separable structure,
+the method can recover it exactly from PDE-residual supervision alone.
+
+\paragraph{Contributions.}
+The principal contributions of this work are as follows.
+\begin{itemize}
+  \item \textbf{Verified EML primitive constructions.}  We provide
+    differentiable, algebraically verified implementations of $\exp$, $\ln$,
+    $\sin$, and $\cos$ built entirely from compositions of the EML function,
+    establishing a concrete link between the universality theorem
+    of~\cite{odrzywołek2026} and practical symbolic computation.
+
+  \item \textbf{ComposeHead architecture.}  We introduce a neural architecture
+    whose hypothesis class is the set of linear combinations of separable
+    products of axis-aligned elementary functions, enabling gradient-based
+    search over symbolic PDE solution candidates.
+
+  \item \textbf{Normalization and snapping pipeline.}  We describe a
+    post-training procedure that absorbs phase offsets and exponential biases
+    into canonical form, then snaps coefficients to exact values, converting
+    a continuously parameterized model into a closed-form symbolic expression.
+
+  \item \textbf{Exact recovery of the Taylor--Green vortex.}  We demonstrate
+    the full pipeline on the two-dimensional incompressible Navier--Stokes
+    equations, recovering the velocity field
+    $u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
+    with pointwise error below $10^{-6}$, confirming that the discovered
+    symbolic expression is an exact solution of the governing equations.
+\end{itemize}
+
+\noindent The remainder of the paper is organized as follows.
+Section~\ref{sec:background} reviews the EML universality result and the
+relevant symbolic regression literature.
+Section~\ref{sec:method} details the primitive constructions, the
+\textsc{ComposeHead} architecture, and the normalization pipeline.
+Section~\ref{sec:experiments} presents the Taylor--Green vortex experiment and
+ablation studies.
+Section~\ref{sec:discussion} discusses limitations and directions for future
+work.

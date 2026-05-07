@@ -1,0 +1,252 @@
+\section{Method}
+\label{sec:method}
+
+We introduce the \textsc{ComposeHead}, a trainable module that represents candidate
+solutions as sums of primitive compositions, together with a search-and-refine
+pipeline that converts learned parameters into exact symbolic expressions.
+The key design principle is to embed the separable product structure common to
+analytical PDE solutions directly into the architecture, so that the optimizer
+need only recover scalar coefficients rather than discover structural patterns
+from scratch.
+
+%% ----------------------------------------------------------------
+\subsection{ComposeHead Architecture}
+\label{sec:composehead}
+
+A \textsc{ComposeHead} with $n$ input dimensions represents a function
+\begin{equation}
+\label{eq:composehead}
+    f(\mathbf{x}) \;=\; \beta \;+\; \sum_{i=1}^{T} c_i \, \phi_i(\mathbf{x}),
+\end{equation}
+where $\beta \in \mathbb{R}$ is a trainable bias, $c_i \in \mathbb{R}$ are trainable
+coefficients, and each $\phi_i$ is a \emph{term}---a composition of primitives drawn
+from a function basis
+$\mathcal{F} = \{\sin, \cos, \exp, \ln, \mathrm{id}, \mathrm{sq}, \mathrm{inv}\}$.
+All primitives are implemented via verified EML constructions (Section~\ref{sec:background}),
+ensuring that the entire forward pass traces back to the base operation
+$\mathrm{eml}(x, y) = e^x - \ln y$.
+
+We define three term types of increasing structural commitment.
+
+\paragraph{PrimitiveTerm.}
+A single primitive applied to a learned linear combination of inputs:
+\begin{equation}
+\label{eq:primitiveterm}
+    \phi(\mathbf{x}) = g\!\left(\mathbf{w}^\top \mathbf{x} + b\right),
+    \quad g \in \mathcal{F},
+\end{equation}
+with trainable parameters $\mathbf{w} \in \mathbb{R}^n$, $b \in \mathbb{R}$, and
+coefficient $c \in \mathbb{R}$.  The weight vector $\mathbf{w}$ allows the term to
+attend to arbitrary linear combinations of input dimensions, providing maximum
+flexibility at the cost of a larger parameter space.
+
+\paragraph{ProductTerm.}
+A pairwise product of two PrimitiveTerms sharing a single coefficient:
+\begin{equation}
+\label{eq:productterm}
+    \phi(\mathbf{x}) = g_1\!\left(\mathbf{w}_1^\top \mathbf{x} + b_1\right)
+    \cdot g_2\!\left(\mathbf{w}_2^\top \mathbf{x} + b_2\right),
+    \quad g_1, g_2 \in \mathcal{F}.
+\end{equation}
+Each factor maintains its own weight vector, enabling expressions such as
+$\sin(\mathbf{w}_1^\top \mathbf{x}) \cos(\mathbf{w}_2^\top \mathbf{x})$.
+In practice, the optimizer must learn near--one-hot patterns in $\mathbf{w}_1$ and
+$\mathbf{w}_2$ to isolate individual input dimensions---a requirement that
+introduces spurious local minima when $n$ is even moderately large.
+
+\paragraph{SeparableTerm (key innovation).}
+A product of $K$ axis-aligned factors, each operating on exactly one input dimension:
+\begin{equation}
+\label{eq:separableterm}
+    \phi(\mathbf{x}) = \prod_{k=1}^{K}
+    g_k\!\left(a_k \, x_{d_k} + b_k\right),
+    \quad g_k \in \mathcal{F},\;\;
+    d_k \in \{1, \ldots, n\},
+\end{equation}
+where each \emph{AxisTerm} factor has only two trainable parameters: a scale
+$a_k \in \mathbb{R}$ and a bias $b_k \in \mathbb{R}$.  The entire SeparableTerm
+shares a single coefficient $c \in \mathbb{R}$.
+
+\smallskip
+
+The central observation motivating the SeparableTerm is that the vast majority of
+known analytical PDE solutions are \emph{separable}---expressible as products of
+univariate functions of individual coordinates.  Classical examples include
+normal modes of the wave equation, Fourier--series solutions to the heat equation,
+and the Taylor--Green vortex solution to the Navier--Stokes equations.
+By making this product-of-univariates structure explicit in the architecture,
+the optimizer is relieved of the burden of discovering one-hot attention patterns
+in free weight vectors.  It need only recover the scalar scales and biases
+within each factor, a dramatically simpler optimization landscape.
+
+Table~\ref{tab:param_counts} summarizes the parameter counts.  The SeparableTerm
+is notable in that its parameter count depends only on the number of factors $K$
+and is \emph{independent} of the input dimensionality $n$.
+
+\begin{table}[t]
+\centering
+\caption{Parameter counts per term type for $n$ input dimensions.  The SeparableTerm
+with $K$ factors is independent of $n$, yielding a favorable scaling for
+high-dimensional separable targets.}
+\label{tab:param_counts}
+\smallskip
+\begin{tabular}{lcc}
+\toprule
+\textbf{Term type} & \textbf{Parameters} & \textbf{Scaling} \\
+\midrule
+PrimitiveTerm     & $n + 2$   & $\mathcal{O}(n)$ \\
+ProductTerm       & $2n + 3$  & $\mathcal{O}(n)$ \\
+SeparableTerm ($K$ factors) & $2K + 1$  & $\mathcal{O}(K)$, independent of $n$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ----------------------------------------------------------------
+\subsection{Training Pipeline}
+\label{sec:pipeline}
+
+Given data $(\mathbf{X}, \mathbf{y})$ with $\mathbf{X} \in \mathbb{R}^{N \times n}$,
+we seek a symbolic expression $\hat{f}$ that approximates the mapping
+$\mathbf{x} \mapsto y$.  Algorithm~\ref{alg:discovery} presents the full
+discovery pipeline.
+
+\begin{algorithm}[t]
+\caption{Compositional EML Discovery}
+\label{alg:discovery}
+\begin{algorithmic}[1]
+\REQUIRE Data $(\mathbf{X}, \mathbf{y})$, input dimension $n$,
+         function basis $\mathcal{F} = \{\sin, \cos, \exp, \ldots\}$
+\ENSURE  Symbolic expression $\hat{f}$
+
+\medskip
+\STATE \textbf{Candidate enumeration.}
+    For each assignment of $K$ functions from $\mathcal{F}$ to $K$ input
+    dimensions $(d_1, \ldots, d_K)$, instantiate a SeparableTerm
+    $\phi = \prod_{k=1}^{K} g_k(a_k \, x_{d_k} + b_k)$.
+    \hfill \COMMENT{$|\mathcal{F}|^K$ candidates for fixed dims}
+
+\medskip
+\STATE \textbf{Parallel evaluation.}
+    Train each candidate independently for $N_{\mathrm{search}}$ steps using
+    the Adam optimizer~\citep{paszke2019}, minimizing
+    $\mathcal{L} = \frac{1}{N}\sum_{i=1}^{N}
+    \bigl(\hat{y}_i - y_i\bigr)^2$.
+    Rank candidates by final MSE.
+
+\medskip
+\STATE \textbf{Selection.}
+    Retain the top-$1$ candidate (or top-$M$ for multi-term targets).
+
+\medskip
+\STATE \textbf{Fine-tuning.}
+    Train the selected term(s) for $N_{\mathrm{fine}}$ additional steps at
+    a reduced learning rate.
+
+\medskip
+\STATE \textbf{Normalization.}
+    Canonicalize the learned parameterization:
+    \begin{itemize}
+        \item \emph{Exponential factors:}
+            absorb the bias into the coefficient via
+            $c \cdot \exp(ax + b) \;\to\; (c \, e^{b}) \cdot \exp(ax)$,
+            then set $b \leftarrow 0$.
+        \item \emph{Trigonometric factors:}
+            reduce the phase $b$ to $[-\pi, \pi]$;
+            absorb sign flips using $\sin(x + \pi) = -\sin(x)$ and
+            $\cos(x + \pi) = -\cos(x)$.
+        \item \emph{Negative coefficients:}
+            if $c < 0$ and a $\sin$ factor is present, exploit
+            $\sin(-x) = -\sin(x)$ to make $c$ positive by negating
+            the scale and bias of that factor.
+    \end{itemize}
+
+\medskip
+\STATE \textbf{Snapping (optional).}
+    Round each parameter to the nearest element of a target set
+    $\mathcal{S} = \{0, \pm 1, \pm \tfrac{1}{2}, \pm \tfrac{1}{3},
+    \pm \tfrac{\pi}{2}, \pm \pi, \pm e, \pm \sqrt{2}, \pm \ln 2, \ldots\}$
+    within tolerance $\tau$.
+    If validation data are available, revert any snap that causes the loss
+    to exceed a maximum ratio $r_{\max}$ relative to the pre-snap loss.
+
+\medskip
+\RETURN Symbolic expression extracted via SymPy conversion of the
+    snapped parameters.
+\end{algorithmic}
+\end{algorithm}
+
+For concreteness, consider the Taylor--Green vortex with inputs
+$\mathbf{x} = (x, y, t)$ and basis $\mathcal{F} = \{\sin, \cos, \exp\}$.
+The candidate enumeration in Step~1 generates $|\mathcal{F}|^3 = 27$ triple
+SeparableTerms (one per function assignment to the three input dimensions).
+Each candidate is trained for $N_{\mathrm{search}} = 2{,}000$ steps (Step~2),
+the best is selected (Step~3), and fine-tuned for $N_{\mathrm{fine}} = 5{,}000$
+steps (Step~4).  The entire search completes in under two minutes on a single
+CPU, as each candidate contains only $2K + 1 = 7$ trainable parameters.
+
+The normalization step (Step~5) is critical for reliable snapping.
+The parameterization $c \cdot g(ax + b)$ admits gauge freedoms:
+for exponential factors, the coefficient $c$ and the term $e^b$ can trade off
+arbitrarily without changing the function value, creating a ridge in the loss
+landscape along which the optimizer may drift.  Normalization breaks these
+symmetries, concentrating the ``meaning'' of each parameter and ensuring that
+the subsequent snapping step compares like with like.
+
+%% ----------------------------------------------------------------
+\subsection{Why This Works}
+\label{sec:why}
+
+We identify five properties of the proposed approach that collectively
+explain its effectiveness on the class of problems we consider.
+
+\paragraph{Separable ansatz matches target structure.}
+The solutions to the PDEs we target---heat equation, wave equation,
+Navier--Stokes in the Taylor--Green regime---are products of univariate functions
+of the spatial and temporal coordinates.  The SeparableTerm directly
+encodes this product-of-univariates structure, so that a correct solution
+lies at a point in parameter space rather than in a complex submanifold
+of a higher-dimensional space.
+
+\paragraph{Reduced search space.}
+Classical symbolic regression methods such as genetic programming~\citep{cranmer2023}
+search over arbitrary expression trees, yielding a combinatorially large
+search space.  Our approach instead enumerates function assignments to input
+dimensions, producing $|\mathcal{F}|^K$ candidates---polynomial in
+$|\mathcal{F}|$ for fixed $K$, and polynomial in $K$ for fixed $|\mathcal{F}|$.
+For the problems considered here, $|\mathcal{F}| \leq 7$ and $K \leq 3$,
+so exhaustive enumeration is tractable.
+
+\paragraph{Normalization resolves gauge freedom.}
+The parameterization $c \cdot g(ax + b)$ introduces redundancies.
+For $g = \exp$, the identity $c \cdot \exp(ax + b) = (c\,e^{b}) \cdot \exp(ax)$
+means that $c$ and $b$ are not independently identifiable.
+For $g = \sin$ or $g = \cos$, the periodicity and parity identities
+create analogous degeneracies.  The normalization step
+(Algorithm~\ref{alg:discovery}, Step~5) systematically eliminates
+these gauge freedoms, yielding a canonical form in which each parameter
+has a unique interpretation.  This is essential: without normalization,
+a parameter with true value $a = 1$ might be learned as $a = 0.93$
+with compensating $b$ and $c$ values, causing the snapping step to fail.
+
+\paragraph{Single-term search avoids signal splitting.}
+When a multi-term model is trained end-to-end, the optimizer may distribute
+the target signal across many terms, each capturing a small fraction
+of the variance.  The resulting coefficient magnitudes are small and
+difficult to distinguish from noise, making pruning unreliable.
+By training each candidate SeparableTerm in isolation (Step~2 of
+Algorithm~\ref{alg:discovery}), we force the optimizer to concentrate
+all model capacity in a single term.  The correct candidate achieves
+near-zero loss; incorrect candidates plateau at high loss.
+This binary signal---correct versus incorrect---is far easier to threshold
+than the continuous coefficient magnitudes in a multi-term model.
+
+\paragraph{Gradient-based optimization.}
+Unlike genetic programming approaches, every operation in our pipeline
+is differentiable.  Each EML primitive---$\exp$ via $\mathrm{eml}(x, 1)$,
+$\sin$ and $\cos$ via the imaginary and real parts of
+$\mathrm{eml}(ix, 1) = e^{ix}$---supports standard backpropagation.
+This allows us to leverage mature gradient-based optimizers (Adam) with
+well-understood convergence properties, rather than relying on stochastic
+search heuristics.  The per-candidate optimization problem is low-dimensional
+($2K + 1$ parameters), smooth, and---for the correct function assignment---typically
+convex in the neighborhood of the true solution.

@@ -31,8 +31,8 @@ dev = ["pytest", "pytest-cov"]
 all = ["anthropic", "openai", "pytest", "pytest-cov"]
 
 [project.urls]
-Homepage = "https://github.com/torch-eml/torch-eml"
-Repository = "https://github.com/torch-eml/torch-eml"
+Homepage = "https://github.com/gaius050526/torch-eml"
+Repository = "https://github.com/gaius050526/torch-eml"
 
 [tool.setuptools.packages.find]
 include = ["torch_eml*"]

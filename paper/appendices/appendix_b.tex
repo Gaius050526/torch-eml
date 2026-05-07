@@ -1,0 +1,120 @@
+\section{Snap Targets and Normalization}
+\label{app:snap}
+
+After training, learned parameters are continuous floating-point values.
+To recover closed-form symbolic expressions, each parameter is rounded
+(``snapped'') to the nearest value in a predefined table of
+mathematically meaningful targets. Table~\ref{tab:snap-targets}
+enumerates the complete set of snap targets used throughout this work.
+
+\begin{table}[h]
+\centering
+\caption{Complete table of snap targets used for rounding learned parameters to clean symbolic values.}
+\label{tab:snap-targets}
+\begin{tabular}{lrl}
+\toprule
+\textbf{Target Value} & \textbf{Numeric Value} & \textbf{Label} \\
+\midrule
+$0$             &  0.000000 & zero \\
+$+1$            &  1.000000 & one \\
+$-1$            & $-1.000000$ & neg one \\
+$+2$            &  2.000000 & two \\
+$-2$            & $-2.000000$ & neg two \\
+$+3$            &  3.000000 & three \\
+$-3$            & $-3.000000$ & neg three \\
+$+\tfrac{1}{2}$ &  0.500000 & half \\
+$-\tfrac{1}{2}$ & $-0.500000$ & neg half \\
+$+\tfrac{1}{3}$ &  0.333333 & third \\
+$-\tfrac{1}{3}$ & $-0.333333$ & neg third \\
+$+\tfrac{2}{3}$ &  0.666667 & two-thirds \\
+$-\tfrac{2}{3}$ & $-0.666667$ & neg two-thirds \\
+$+\tfrac{1}{4}$ &  0.250000 & quarter \\
+$-\tfrac{1}{4}$ & $-0.250000$ & neg quarter \\
+$+\tfrac{1}{5}$ &  0.200000 & fifth \\
+$-\tfrac{1}{5}$ & $-0.200000$ & neg fifth \\
+$+\tfrac{3}{2}$ &  1.500000 & three-halves \\
+$-\tfrac{3}{2}$ & $-1.500000$ & neg three-halves \\
+$+\pi$          &  3.141593 & pi \\
+$-\pi$          & $-3.141593$ & neg pi \\
+$+\tfrac{\pi}{2}$ &  1.570796 & pi/2 \\
+$-\tfrac{\pi}{2}$ & $-1.570796$ & neg pi/2 \\
+$+\tfrac{\pi}{4}$ &  0.785398 & pi/4 \\
+$-\tfrac{\pi}{4}$ & $-0.785398$ & neg pi/4 \\
+$+e$            &  2.718282 & euler \\
+$-e$            & $-2.718282$ & neg euler \\
+$+\sqrt{2}$    &  1.414214 & sqrt2 \\
+$-\sqrt{2}$    & $-1.414214$ & neg sqrt2 \\
+$+\ln 2$       &  0.693147 & ln2 \\
+$-\ln 2$       & $-0.693147$ & neg ln2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Given a learned parameter $\hat{\theta}$, snapping selects
+$\theta^* = \arg\min_{\theta \in \mathcal{T}} |\hat{\theta} - \theta|$,
+where $\mathcal{T}$ is the set of targets above, subject to the
+constraint that $|\hat{\theta} - \theta^*| < \epsilon_{\mathrm{snap}}$.
+If no target lies within the tolerance $\epsilon_{\mathrm{snap}}$, the
+raw floating-point value is retained.
+
+\subsection{Normalization of \texttt{SeparableTerm}}
+
+The parameterization of a \texttt{SeparableTerm} as a product
+\begin{equation}
+  c \;\prod_k f_k(a_k x_k + b_k),
+  \label{eq:separable-form}
+\end{equation}
+where each $f_k \in \{\exp, \sin, \cos, \mathrm{id}\}$, possesses
+\emph{gauge freedom}: multiple distinct parameter settings yield the
+same function. For example,
+\begin{equation}
+  c \cdot \exp(a x + b) \;=\; \bigl[c \cdot e^{b}\bigr] \cdot \exp(a x),
+\end{equation}
+so the coefficient $c$ and bias $b$ can trade off arbitrarily without
+changing the represented function. If left unnormalized, the optimizer
+may converge to any point along this gauge orbit, placing the learned
+parameters far from the snap targets and causing snapping to produce
+incorrect symbolic expressions. Normalization breaks this symmetry by
+imposing canonical constraints before snapping is applied.
+
+The normalization algorithm proceeds in three steps:
+
+\paragraph{Step 1: Exponential bias absorption.}
+For each exponential factor $\exp(a_k x_k + b_k)$ in the term, the
+bias is absorbed into the coefficient:
+\begin{equation}
+  c \leftarrow c \cdot e^{b_k}, \qquad b_k \leftarrow 0.
+\end{equation}
+After this step, every exponential factor has the form $\exp(a_k x_k)$
+and the coefficient $c$ carries the full scale.
+
+\paragraph{Step 2: Trigonometric bias reduction.}
+For each sinusoidal factor $\sin(a_k x_k + b_k)$ or
+$\cos(a_k x_k + b_k)$, the bias $b_k$ is reduced to the principal
+interval $[-\pi, \pi]$ via modular arithmetic:
+\begin{equation}
+  b_k \leftarrow \bigl((b_k + \pi) \bmod 2\pi\bigr) - \pi.
+\end{equation}
+If, after reduction, $|b_k| > \tfrac{\pi}{2} + \varepsilon$, a
+half-period shift is applied. Using the identity
+$\sin(x + \pi) = -\sin(x)$ (and analogously for cosine), we set
+\begin{equation}
+  b_k \leftarrow b_k - \operatorname{sign}(b_k)\,\pi, \qquad c \leftarrow -c.
+\end{equation}
+This ensures all trigonometric biases lie in $[-\tfrac{\pi}{2} - \varepsilon,\; \tfrac{\pi}{2} + \varepsilon]$, concentrating them near the
+small set of snap targets $\{0, \pm\tfrac{\pi}{4}, \pm\tfrac{\pi}{2}\}$.
+
+\paragraph{Step 3: Sign canonicalization via sine parity.}
+If the overall coefficient $c$ is negative and the term contains at
+least one sine factor $\sin(a_j x_j + b_j)$, the sign is absorbed
+using the odd-symmetry identity $\sin(-z) = -\sin(z)$:
+\begin{equation}
+  a_j \leftarrow -a_j, \qquad b_j \leftarrow -b_j, \qquad c \leftarrow -c.
+\end{equation}
+This removes a residual sign ambiguity, ensuring that the coefficient
+$c$ is non-negative whenever a sine factor is present.
+
+Together, these three steps place the parameters of each
+\texttt{SeparableTerm} into a canonical form in which every degree of
+freedom corresponds to a genuinely independent quantity, making the
+subsequent snapping procedure both reliable and unambiguous.

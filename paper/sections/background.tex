@@ -1,0 +1,221 @@
+\section{Background}
+\label{sec:background}
+
+This section introduces the EML function and its universality properties, describes the
+verified primitive constructions that form the basis of our method, and reviews the two
+families of prior work---physics-informed neural networks and symbolic
+regression---against which we position our approach.
+
+%% ---------- 2.1 ----------
+\subsection{The EML Function}
+\label{sec:eml}
+
+The \emph{Exp-Minus-Log} (EML) function is defined as
+\begin{equation}
+  \mathrm{eml}(x,y) \;=\; e^{x} - \ln y, \qquad x \in \mathbb{R},\; y > 0.
+  \label{eq:eml-def}
+\end{equation}
+Odrzywo{\l}ek~\cite{odrzywołek2026} established that $\mathrm{eml}$ is a
+\emph{universal function}: every computable function admits a representation as a
+finite recursive composition of $\mathrm{eml}$ operations.  This result is
+surprising in that a single bivariate primitive suffices to generate the full
+hierarchy of elementary and special functions.
+
+Several elementary identities follow directly from the definition:
+\begin{align}
+  \mathrm{eml}(x, 1) &= e^{x},
+    &\text{since } \ln 1 = 0, \label{eq:eml-exp}\\
+  \mathrm{eml}(0, y)  &= 1 - \ln y,
+    &\text{since } e^{0} = 1, \label{eq:eml-const}\\
+  \frac{\partial\,\mathrm{eml}}{\partial x} &= e^{x},
+    &\frac{\partial\,\mathrm{eml}}{\partial y} = -\frac{1}{y}.
+    \label{eq:eml-deriv}
+\end{align}
+The closure of $\mathrm{eml}$ under differentiation---each partial derivative
+is itself expressible via the primitives $e^{x}$ and $1/y$---is a property we
+exploit heavily in Section~\ref{sec:method}, where PDE residuals must be
+differentiated through the compositional graph.
+
+\paragraph{Limitations.}
+The universality claim is subject to important caveats.
+Smith~\cite{smith2024} demonstrated that $\mathrm{eml}$ cannot express roots of
+generic quintic polynomials whose associated Galois groups are non-solvable,
+a consequence of the Abel--Ruffini theorem applied to the monodromy structure of
+$\mathrm{eml}$ compositions.  Separately, \.{I}pek~\cite{ipek2024}
+proposed an extension of the universality result (arXiv:2604.13871), but the paper
+was subsequently withdrawn by the author citing a ``fundamental limitation'' in the
+proof.  These results constrain the theoretical scope of EML universality but do
+not affect the practical utility of the framework for compositions of elementary
+functions---the regime relevant to PDE solutions encountered in physics.
+
+\paragraph{Depth requirements.}
+Even for elementary operations, the depth of the required $\mathrm{eml}$ composition
+can be substantial.  Odrzywo{\l}ek~\cite{odrzywołek2026} reports that expressing
+$\ln$ requires depth~3, multiplication requires a reverse-Polish notation (RPN)
+representation of length~41, and the constant $\pi$ requires length~193 or more.
+These figures render direct gradient-based optimization over raw EML expression
+trees impractical: the search space is combinatorially vast, and the resulting
+computation graphs are deep enough to suffer from vanishing and exploding
+gradients.  This observation motivates the strategy described in
+Section~\ref{sec:primitives}: rather than learning $\mathrm{eml}$ trees, we
+pre-compute algebraically verified constructions for a small set of elementary
+functions and optimize over compositions of those constructions.
+
+%% ---------- 2.2 ----------
+\subsection{Verified Primitive Constructions}
+\label{sec:primitives}
+
+The central idea of our method is to bridge the gap between the theoretical
+universality of $\mathrm{eml}$ and the practical requirements of gradient-based
+optimization.  We achieve this by pre-computing a library of fixed,
+algebraically verified constructions that express standard elementary functions
+as $\mathrm{eml}$ compositions.  Each construction is implemented as a frozen
+PyTorch module with no learnable parameters; the optimization problem is thus
+lifted from the space of raw $\mathrm{eml}$ trees to the space of linear
+combinations of these verified primitives.
+
+\paragraph{Exponential.}
+The simplest construction is immediate from~\eqref{eq:eml-exp}:
+\begin{equation}
+  \exp(x) = \mathrm{eml}(x, 1).
+  \label{eq:prim-exp}
+\end{equation}
+This is a depth-1 composition.
+
+\paragraph{Natural logarithm.}
+The logarithm requires depth~3.  We construct it as follows:
+\begin{equation}
+  \ln(z) = \mathrm{eml}\!\Big(1,\;\mathrm{eml}\!\big(\mathrm{eml}(1,z),\;1\big)\Big).
+  \label{eq:prim-ln}
+\end{equation}
+To verify, evaluate from the inside outward.  First,
+$\mathrm{eml}(1, z) = e - \ln z$.  Second,
+$\mathrm{eml}(e - \ln z,\; 1) = \exp(e - \ln z)$, since $\ln 1 = 0$.
+Third,
+\[
+  \mathrm{eml}\!\big(1,\; \exp(e - \ln z)\big)
+  = e - \ln\!\big(\exp(e - \ln z)\big)
+  = e - (e - \ln z)
+  = \ln z.
+\]
+
+\paragraph{Sine and cosine.}
+The trigonometric functions are obtained via the complex extension of
+$\mathrm{eml}$.  Because $\mathrm{eml}(ix, 1) = \exp(ix) - \ln 1 = \exp(ix)$,
+Euler's formula gives
+\begin{align}
+  \sin(x) &= \operatorname{Im}\!\big(\mathrm{eml}(ix, 1)\big),
+    \label{eq:prim-sin}\\
+  \cos(x) &= \operatorname{Re}\!\big(\mathrm{eml}(ix, 1)\big).
+    \label{eq:prim-cos}
+\end{align}
+In practice, we implement $\mathrm{eml}(ix, 1)$ using PyTorch's complex tensor
+arithmetic, extracting the real and imaginary parts to obtain $\cos$ and $\sin$
+respectively.
+
+\paragraph{The constant $\boldsymbol{\pi}$.}
+The circle constant is recovered from the complex logarithm construction:
+\begin{equation}
+  \pi = -\operatorname{Im}\!\big(\ln(-1)\big),
+  \label{eq:prim-pi}
+\end{equation}
+where $\ln$ is the depth-3 EML construction of~\eqref{eq:prim-ln} extended to
+complex arguments.
+
+\paragraph{Verification protocol.}
+It is essential to emphasize that none of these constructions are learned.
+They are algebraic identities, proved symbolically and implemented as
+deterministic modules.  We verify each implementation numerically against the
+corresponding PyTorch intrinsic (\texttt{torch.sin}, \texttt{torch.cos},
+\texttt{torch.exp}, \texttt{torch.log}) over $10^{6}$ uniformly sampled
+points, confirming pointwise agreement to within $10^{-5}$.  This verification
+step guarantees that the compositional basis inherits the full numerical
+fidelity of the underlying hardware transcendentals.
+
+%% ---------- 2.3 ----------
+\subsection{Physics-Informed Neural Networks}
+\label{sec:pinns}
+
+Physics-informed neural networks (PINNs), introduced by Raissi, Perdikaris,
+and Karniadakis~\cite{raissi2019}, embed the governing PDE directly into the
+training loss.  Given a PDE of the form $\mathcal{N}[u] = 0$ with boundary
+conditions $\mathcal{B}[u] = 0$, a PINN parameterizes the solution as a neural
+network $u_{\theta}$ and minimizes
+\begin{equation}
+  \mathcal{L}
+  = \underbrace{\frac{1}{N_d}\sum_{i=1}^{N_d}
+      \big|u_{\theta}(\mathbf{x}_i) - u_i^{\mathrm{data}}\big|^{2}
+    }_{\mathcal{L}_{\mathrm{data}}}
+  + \lambda\,
+    \underbrace{\frac{1}{N_r}\sum_{j=1}^{N_r}
+      \big|\mathcal{N}[u_{\theta}](\mathbf{x}_j)\big|^{2}
+    }_{\mathcal{L}_{\mathrm{PDE}}},
+  \label{eq:pinn-loss}
+\end{equation}
+where $\{\mathbf{x}_i, u_i^{\mathrm{data}}\}$ are observed data points,
+$\{\mathbf{x}_j\}$ are collocation points sampled in the interior of the
+domain, and $\lambda$ is a weighting hyperparameter.
+
+PINNs possess several attractive properties: they are mesh-free, accommodate
+irregular geometries naturally, and can incorporate partial or noisy
+observations.  These features have driven widespread adoption across
+computational physics.  However, for the purposes of the present work, PINNs
+suffer from a fundamental limitation: their output is a set of network weights
+$\theta$, not a symbolic expression.  Consequently, PINN solutions offer no
+direct interpretability, cannot be analytically verified against the governing
+equations, and do not transfer to related problems in the way that a closed-form
+expression does.  Our method retains the physics-informed loss
+structure~\eqref{eq:pinn-loss} but replaces the neural network ansatz with a
+compositional search over EML-derived primitives, thereby recovering the
+symbolic form of the solution.
+
+%% ---------- 2.4 ----------
+\subsection{Symbolic Regression}
+\label{sec:symreg}
+
+Symbolic regression seeks to identify a mathematical expression that fits
+observed data, searching simultaneously over functional forms and numerical
+coefficients.  Two recent systems are particularly relevant.
+
+\textbf{PySR}~\cite{cranmer2023} combines genetic programming with local
+gradient-based refinement.  An evolving population of expression trees is
+subject to mutation, crossover, and selection operators, with periodic
+gradient descent applied to the numerical constants in each tree.  PySR has
+demonstrated strong performance on a range of scientific benchmarks.
+
+\textbf{AI Feynman}~\cite{udrescu2020} takes a complementary approach,
+exploiting physics-inspired strategies such as dimensional analysis, symmetry
+detection, and separability testing to decompose complex expressions into
+simpler sub-problems before applying brute-force or neural-network-guided
+search.
+
+Both methods excel at recovering algebraic laws of moderate complexity---the
+paradigmatic examples being $F = ma$ and $E = mc^{2}$.  However, they face
+significant challenges in the regime targeted by the present work:
+\begin{itemize}
+  \item \emph{Multi-variable PDE solutions.}  Solutions to PDEs in two or more
+    spatial dimensions typically involve products of univariate functions along
+    different axes (e.g., $\sin(x)\cos(y)$).  Standard symbolic regression
+    treats the entire expression as a single tree, making it difficult to
+    exploit this separable structure.
+  \item \emph{Combinatorial explosion.}  The space of nested function
+    compositions grows super-exponentially with expression depth.  Genetic
+    operators struggle to navigate this space efficiently when the target
+    involves three or more levels of composition.
+  \item \emph{Mixed exponential--trigonometric forms.}  Time-dependent
+    solutions with spatial oscillation and temporal decay---such as
+    $\sin(x)\exp(-\alpha t)$---require the simultaneous discovery of
+    exponential and trigonometric primitives with coupled coefficients, a
+    combination that lies in a particularly sparse region of typical
+    expression-tree search spaces.
+\end{itemize}
+
+Our approach addresses these difficulties by constraining the search to a
+physically motivated basis of EML-derived primitives organized into separable,
+axis-aligned terms.  Rather than evolving arbitrary expression trees, we
+optimize a structured ansatz whose functional building blocks---$\sin$, $\cos$,
+$\exp$, $\ln$---are fixed and verified, while only the linear combination
+coefficients and frequency parameters remain trainable.  This reduces the
+effective search space by orders of magnitude while retaining the capacity to
+express the product-of-functions structure characteristic of classical PDE
+solutions.

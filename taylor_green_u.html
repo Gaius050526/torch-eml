@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Taylor-Green u(x,y,t)</title>
+<style>
+  body {
+    background: #0d0d1a;
+    color: #eee;
+    font-family: -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+    margin: 0;
+  }
+  h1 {
+    font-size: 24px;
+    color: #4a9eff;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .node circle {
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .node:hover circle {
+    stroke-width: 3;
+    filter: brightness(1.3);
+  }
+  #tooltip {
+    position: fixed;
+    background: #16213e;
+    border: 1px solid #4a9eff;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #eee;
+    pointer-events: none;
+    white-space: pre;
+    display: none;
+    z-index: 100;
+  }
+  .legend {
+    display: flex;
+    gap: 20px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #888;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+<h1>Taylor-Green u(x,y,t)</h1>
+<div class="subtitle">depth=4, nodes=15, leaves=16</div>
+<svg width="960" height="460" viewBox="0 0 960 460">
+  <line x1="480.0" y1="40" x2="240.0" y2="120" stroke="#4a9eff" stroke-width="2" /><line x1="480.0" y1="40" x2="720.0" y2="120" stroke="#ff6b4a" stroke-width="2" /><line x1="240.0" y1="120" x2="120.0" y2="200" stroke="#4a9eff" stroke-width="2" /><line x1="240.0" y1="120" x2="360.0" y2="200" stroke="#ff6b4a" stroke-width="2" /><line x1="720.0" y1="120" x2="600.0" y2="200" stroke="#4a9eff" stroke-width="2" /><line x1="720.0" y1="120" x2="840.0" y2="200" stroke="#ccc" stroke-width="2" /><line x1="120.0" y1="200" x2="60.0" y2="280" stroke="#4a9eff" stroke-width="2" /><line x1="120.0" y1="200" x2="180.0" y2="280" stroke="#ff6b4a" stroke-width="2" /><line x1="360.0" y1="200" x2="300.0" y2="280" stroke="#4a9eff" stroke-width="2" /><line x1="360.0" y1="200" x2="420.0" y2="280" stroke="#ff6b4a" stroke-width="2" /><line x1="600.0" y1="200" x2="540.0" y2="280" stroke="#4a9eff" stroke-width="2" /><line x1="600.0" y1="200" x2="660.0" y2="280" stroke="#ff6b4a" stroke-width="2" /><line x1="840.0" y1="200" x2="780.0" y2="280" stroke="#ccc" stroke-width="2" /><line x1="840.0" y1="200" x2="900.0" y2="280" stroke="#ccc" stroke-width="2" />
+  <g class="node" onmouseover="showTooltip(evt, 'Node 0\nw_left=-0.8902, bias_left=0.2290\nw_right=0.0014, bias_right=-1.2963')" onmouseout="hideTooltip()"><circle cx="480.0" cy="40" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="480.0" y="45" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 1\nw_left=0.5000, bias_left=-1.5591\nw_right=0.8405, bias_right=-1.8090')" onmouseout="hideTooltip()"><circle cx="240.0" cy="120" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="240.0" y="125" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 2\nw_left=0.4351, bias_left=0.2247\nw_right=1.1613, bias_right=0.0000')" onmouseout="hideTooltip()"><circle cx="720.0" cy="120" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="720.0" y="125" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 3\nw_left=0.5000, bias_left=0.0000\nw_right=0.0227, bias_right=8.1658')" onmouseout="hideTooltip()"><circle cx="120.0" cy="200" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="120.0" y="205" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 4\nw_left=0.6392, bias_left=0.1784\nw_right=1.0000, bias_right=3.6542')" onmouseout="hideTooltip()"><circle cx="360.0" cy="200" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="360.0" y="205" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 5\nw_left=0.5324, bias_left=0.6667\nw_right=-0.0333, bias_right=0.1701')" onmouseout="hideTooltip()"><circle cx="600.0" cy="200" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="600.0" y="205" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 6 (pruned)\nConstant: -3.63')" onmouseout="hideTooltip()"><circle cx="840.0" cy="200" r="22" fill="#f0f0f0" stroke="#ccc" stroke-width="2" /><text x="840.0" y="205" text-anchor="middle" fill="#999" font-family="monospace" font-size="11">-3.63</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 7\nw_left=-0.5000, bias_left=0.2108\nw_right=0.1145, bias_right=-0.7146')" onmouseout="hideTooltip()"><circle cx="60.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="60.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 8\nw_left=-1.4090, bias_left=-1.3485\nw_right=0.6931, bias_right=0.0000')" onmouseout="hideTooltip()"><circle cx="180.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="180.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 9\nw_left=0.3333, bias_left=0.5206\nw_right=0.1614, bias_right=-0.3333')" onmouseout="hideTooltip()"><circle cx="300.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="300.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 10\nw_left=-1.0000, bias_left=0.1794\nw_right=0.0000, bias_right=0.0000')" onmouseout="hideTooltip()"><circle cx="420.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="420.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 11\nw_left=0.0623, bias_left=0.4313\nw_right=0.0229, bias_right=-0.0732')" onmouseout="hideTooltip()"><circle cx="540.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="540.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 12\nw_left=0.6066, bias_left=-0.6193\nw_right=0.8835, bias_right=0.3333')" onmouseout="hideTooltip()"><circle cx="660.0" cy="280" r="22" fill="#1a1a2e" stroke="#4a9eff" stroke-width="2" /><text x="660.0" y="285" text-anchor="middle" fill="#fff" font-family="monospace" font-size="11">eml</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 13 (pruned)\nConstant: -0.24')" onmouseout="hideTooltip()"><circle cx="780.0" cy="280" r="22" fill="#f0f0f0" stroke="#ccc" stroke-width="2" /><text x="780.0" y="285" text-anchor="middle" fill="#999" font-family="monospace" font-size="11">-0.24</text></g><g class="node" onmouseover="showTooltip(evt, 'Node 14 (pruned)\nConstant: 1668.47')" onmouseout="hideTooltip()"><circle cx="900.0" cy="280" r="22" fill="#f0f0f0" stroke="#ccc" stroke-width="2" /><text x="900.0" y="285" text-anchor="middle" fill="#999" font-family="monospace" font-size="11">1668.47</text></g>
+  <text x="30.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x0</text><text x="90.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x1</text><text x="150.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x2</text><text x="210.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x3</text><text x="270.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x4</text><text x="330.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x5</text><text x="390.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x6</text><text x="450.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x7</text><text x="510.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x8</text><text x="570.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x9</text><text x="630.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x10</text><text x="690.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x11</text><text x="750.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x12</text><text x="810.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x13</text><text x="870.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x14</text><text x="930.0" y="445" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">x15</text>
+</svg>
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#4a9eff"></div> left (exp)
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#ff6b4a"></div> right (ln)
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#ccc"></div> pruned
+  </div>
+</div>
+<div style="margin-top:16px;padding:12px 20px;background:#1a1a2e;border-radius:8px;font-family:monospace;color:#4a9eff;font-size:14px;word-break:break-all;">f(x) = 1.25731399444354*(Abs(-1.00463827646017*exp(1.07574830504172*exp(0.333333343267441*x4))/(Abs(0.161355897784233*x5 - 0.333333343267441) + 1.0e-7)**0.639177203178406 + 0.840507686138153*log(Abs(19.7722914364808 + 1.19654756274937*exp(-1.0*x6)) + 1.0e-7) + 1.8089519739151) + 1.0e-7)**0.89015531539917*exp(-0.187231421375727*exp(0.5*exp(0.617349334925216*exp(-0.5*x0))/(Abs(0.114548690617085*x1 - 0.714600384235382) + 1.0e-7)**0.5)/(Abs(-0.0226642154157162*log(0.6931471824646*Abs(x3) + 1.0e-7) + 8.1658239364624 + 0.0058842884444784*exp(-1.4089527130127*x2)) + 1.0e-7)**0.5) - log(Abs(0.00176275956071235*exp(0.847548585490131*exp(0.819602890825046*exp(0.0623428113758564*x8))/(Abs(0.0228506121784449*x9 - 0.073153480887413) + 1.0e-7)**0.532446682453156)/(Abs(-0.0179369454197812*exp(0.606616020202637*x10) + 0.0333191677927971*log(Abs(0.883450388908386*x11 + 0.333333343267441) + 1.0e-7) + 0.17011496424675) + 1.0e-7)**0.435145944356918 - 1.30051764993565) + 1.0e-7)</div>
+<div id="tooltip"></div>
+<script>
+function showTooltip(evt, text) {
+  const t = document.getElementById('tooltip');
+  t.textContent = text;
+  t.style.display = 'block';
+  t.style.left = (evt.clientX + 15) + 'px';
+  t.style.top = (evt.clientY - 10) + 'px';
+}
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+</script>
+</body>
+</html>

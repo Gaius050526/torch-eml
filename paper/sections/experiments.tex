@@ -1,0 +1,249 @@
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate the proposed pipeline on three classes of problems: a
+two-dimensional incompressible Navier--Stokes benchmark (Section~\ref{sec:tgv}),
+two canonical viscous-flow profiles (Section~\ref{sec:couette_poiseuille}), and
+a pair of algebraic physical laws recovered from noisy data
+(Section~\ref{sec:algebraic}).  Section~\ref{sec:ablation} presents ablation
+studies isolating the contribution of each design choice.  All experiments use
+PyTorch~2.0+ on a single CPU; the Taylor--Green search completes in under
+four minutes.
+
+% ===========================================================================
+\subsection{Taylor--Green Vortex (2-D Incompressible Navier--Stokes)}
+\label{sec:tgv}
+
+The Taylor--Green vortex is an exact, time-decaying solution to the
+two-dimensional incompressible Navier--Stokes equations:
+\begin{align}
+  u(x,y,t) &= \phantom{-}\sin(x)\cos(y)\,\exp(-2\nu t), \label{eq:tgv_u}\\
+  v(x,y,t) &= -\cos(x)\sin(y)\,\exp(-2\nu t), \label{eq:tgv_v}\\
+  p(x,y,t) &= -\tfrac{1}{4}\bigl[\cos(2x)+\cos(2y)\bigr]\exp(-4\nu t),
+              \label{eq:tgv_p}
+\end{align}
+where $\nu=0.1$ is the kinematic viscosity.  Because the velocity field is a
+product of separable, axis-aligned elementary functions, this problem provides
+an ideal test of whether the \textsc{ComposeHead} can recover exact symbolic
+structure from data alone.
+
+\paragraph{Setup.}
+We sample $n=3{,}000$ training points uniformly over
+$x,y\in[0,2\pi]$, $t\in[0,1]$ and evaluate both velocity components at the
+exact solution~\eqref{eq:tgv_u}--\eqref{eq:tgv_v}.  The function basis is
+$\mathcal{F}=\{\sin,\cos,\exp\}$, yielding $|\mathcal{F}|^3=27$ triple
+separable candidates of the form $f(x)\,g(y)\,h(t)$.  Each candidate is
+trained independently for 2{,}000 steps with Adam (learning rate $0.01$,
+gradient clipping at max-norm~$1.0$).  The best candidate for each velocity
+component is then fine-tuned for an additional 5{,}000 steps at learning rate
+$0.005$.
+
+\paragraph{Search results.}
+For the $u$-component, the search identifies
+$\sin(\cdot)\!\cdot\!\sin(\cdot)\!\cdot\!\exp(\cdot)$ as the lowest-loss
+candidate (loss $<10^{-8}$); for $v$, the winner is
+$\cos(\cdot)\!\cdot\!\cos(\cdot)\!\cdot\!\exp(\cdot)$.  These selections appear
+to differ from the ground truth, which contains $\sin\!\cdot\!\cos$ and
+$\cos\!\cdot\!\sin$ factors, respectively.  The discrepancy is resolved by
+observing that the optimizer absorbs phase shifts into the bias parameters:
+$\sin(x - \pi)\sin(y - \pi/2)\exp(at+b) = \sin(x)\cos(y)\exp(at)\exp(b)$
+up to sign, so the learned representation is equivalent to the true solution
+modulo a reparameterization that the normalization step removes.
+
+\paragraph{Raw learned parameters.}
+After fine-tuning, the combined MSE loss reaches $\sim\!10^{-10}$.  The raw
+parameters before normalization are as follows:
+\begin{itemize}
+  \item $u$: $\text{coeff}=0.540$;\;
+        $\sin_0$: $a\!=\!1.000$, $b\!=\!{-3.142}\;(\approx -\pi)$;\;
+        $\sin_1$: $a\!=\!1.000$, $b\!=\!{-1.571}\;(\approx -\pi/2)$;\;
+        $\exp_2$: $a\!=\!{-0.200}$, $b\!=\!0.616$.
+  \item $v$: $\text{coeff}=0.594$;\;
+        $\cos_0$: $a\!=\!1.000$, $b\!=\!0.000$;\;
+        $\cos_1$: $a\!=\!1.000$, $b\!=\!1.571\;(\approx \pi/2)$;\;
+        $\exp_2$: $a\!=\!{-0.200}$, $b\!=\!0.522$.
+\end{itemize}
+
+\paragraph{Normalization and snapping.}
+The normalization step (i)~absorbs exponential biases into the coefficient
+($e^{0.616}\approx 1.851$, yielding $0.540 \times 1.851 \approx 1.000$),
+(ii)~canonicalizes trigonometric phases by applying the identities
+$\sin(x-\pi)=-\sin(x)$ and $\sin(y-\pi/2)=\cos(y-\pi)\mapsto -\cos(y)$
+together with the sign-absorption rule for $\sin$, and
+(iii)~reduces all bias terms to zero.
+After normalization, coefficient snapping with tolerance~$0.05$ yields the
+exact closed-form expressions:
+\begin{equation}
+  \hat{u} = \sin(x)\cos(y)\exp(-t/5), \qquad
+  \hat{v} = -\cos(x)\sin(y)\exp(-t/5).
+  \label{eq:recovered}
+\end{equation}
+The snap error---defined as the mean absolute difference between the snapped
+model and the ground truth on 5{,}000 held-out points---is $7\times10^{-8}$,
+consistent with machine precision.
+
+\paragraph{PDE residual verification.}
+We verify the recovered solution against the governing equations.  The
+continuity residual $|\nabla\!\cdot\!\mathbf{u}|$ has mean value
+$3\times10^{-4}$, attributable to finite-difference approximation of the
+divergence.  The momentum residuals are non-zero because the pipeline does not
+model the pressure field; the residual in each momentum equation equals
+$\nabla p$, which is consistent with the pressure
+gradient implied by~\eqref{eq:tgv_p}.
+
+\paragraph{Comparison with baselines.}
+Table~\ref{tab:tgv_comparison} compares four approaches on the same
+Taylor--Green data set.
+
+\begin{table}[t]
+  \centering
+  \caption{Comparison of methods on the Taylor--Green vortex.  ``Data Error''
+    is the mean squared error on the training data after convergence.
+    ``Symbolic Output'' indicates whether the method produces a human-readable
+    formula.}
+  \label{tab:tgv_comparison}
+  \smallskip
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Method & Data Error & Symbolic Output & Interpretable \\
+    \midrule
+    MLP-PINN (3-layer, 64-wide)
+      & ${\sim}\,10^{-3}$ & No (weight matrix) & No \\
+    Raw EML tree (depth 4)
+      & ${\sim}\,0.28$    & Opaque nested \texttt{eml()} & Barely \\
+    \textsc{ComposeHead} (free weights)
+      & ${\sim}\,10^{-3}$ & Messy multi-term sum & Partially \\
+    \textsc{ComposeHead} (separable)
+      & $7\!\times\!10^{-8}$ & $\sin(x)\cos(y)\exp(-t/5)$ & \textbf{Yes} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The MLP-PINN achieves low data error but yields an opaque weight matrix.  The
+raw EML tree (depth~4) struggles with the three-variable product structure and
+converges to a poor local minimum.  The \textsc{ComposeHead} with free
+(non-axis-aligned) weight vectors fits the data reasonably but distributes
+signal across multiple terms, producing a multi-term expression that resists
+simplification.  Only the separable \textsc{ComposeHead} recovers the exact
+symbolic solution.
+
+% ===========================================================================
+\subsection{Couette and Poiseuille Flow}
+\label{sec:couette_poiseuille}
+
+As elementary validation cases, we apply the method to two one-dimensional
+viscous flows for which closed-form solutions are known \emph{a priori}.
+
+\paragraph{Couette flow.}
+The steady-state velocity profile between a stationary wall ($y=0$) and a
+moving wall ($y=H$, velocity $U_0$) satisfies $\mathrm{d}^2u/\mathrm{d}y^2=0$
+with boundary conditions $u(0)=0$, $u(H)=U_0$, giving
+$u(y)=U_0\,y/H$.
+Using a depth-2 EML tree with PDE-residual loss (enforcing the zero
+second derivative) and boundary penalty terms, the method recovers the identity
+function $\mathrm{id}(y)$ with the correct multiplicative coefficient.  The
+recovery is trivially exact.
+
+\paragraph{Poiseuille flow.}
+Pressure-driven flow in a channel of height~$H$ yields
+$u(y) = \frac{\Delta P}{2\mu L}(Hy - y^2)$,
+a parabolic profile.  Using a depth-3 EML tree with the boundary conditions
+$u(0)=u(H)=0$ and the constant-second-derivative constraint
+$\mathrm{d}^2u/\mathrm{d}y^2 = -\Delta P / (\mu L)$, the search recovers
+$\mathrm{id}(y)$ and $\mathrm{sq}(y)$ terms with the expected coefficients.
+The recovery is again trivially exact.
+
+These two cases confirm that the primitive library and snapping pipeline handle
+polynomial solutions correctly, complementing the transcendental-function
+recovery demonstrated by the Taylor--Green experiment.
+
+% ===========================================================================
+\subsection{Algebraic Physical Laws}
+\label{sec:algebraic}
+
+To demonstrate that the method generalizes beyond PDE solutions to algebraic
+relationships, we apply the raw EML tree search (depth~3--4) to two classical
+laws from noisy synthetic data.
+
+\paragraph{Kepler's third law.}
+We generate 400 data points $(a_i, T_i)$ with $a\in[0.5, 3.0]$ and
+$T = a^{3/2} + \varepsilon$, $\varepsilon\sim\mathcal{N}(0, 0.01)$.  The
+search recovers $T = a^{3/2}$ as a composition of EML primitives, with
+validation loss below $10^{-4}$ after snapping.
+
+\paragraph{Inverse square law.}
+From 400 points $(r_i, F_i)$ with $r\in[0.5, 3.0]$ and
+$F = 1/r^{2} + \varepsilon$, $\varepsilon\sim\mathcal{N}(0, 0.01)$, the
+search recovers $F = r^{-2}$.
+
+These experiments confirm that EML-based symbolic regression is not restricted
+to the separable-product ansatz of the \textsc{ComposeHead} but can also
+discover power-law and rational relationships via the general tree search,
+provided the target expression is of moderate complexity.
+
+% ===========================================================================
+\subsection{Ablation Study}
+\label{sec:ablation}
+
+We isolate the effect of each design decision on the Taylor--Green benchmark.
+Table~\ref{tab:ablation} summarizes the results.
+
+\begin{table}[t]
+  \centering
+  \caption{Ablation study on the Taylor--Green vortex.  Each row modifies one
+    component of the default pipeline (separable single-term search with
+    normalization).  ``Snap Error'' is the mean absolute error of the snapped
+    model on 5{,}000 held-out points.}
+  \label{tab:ablation}
+  \smallskip
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Variant & Snap Error & Outcome \\
+    \midrule
+    \textbf{Full pipeline (default)}
+      & $7\!\times\!10^{-8}$ & Exact recovery \\
+    Free-weight terms (non-separable)
+      & ${\sim}\,10^{-3}$ & Multi-term local minimum \\
+    Multi-term with $L_1$ regularization
+      & ${\sim}\,10^{-2}$ & Over-pruning of 60+ competing terms \\
+    Without normalization (direct snap)
+      & $0.005$--$0.02$ & Phase offsets corrupt snapping \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Separable vs.\ free-weight terms.}
+When each factor's weight vector is a free $\mathbb{R}^3$ vector rather than
+an axis-aligned scalar, the optimizer converges to a representation that
+spreads signal across multiple terms.  The resulting multi-term sum achieves
+reasonable data error (${\sim}\,10^{-3}$) but does not simplify to the
+known single-product expression, because the weight sharing across input
+dimensions introduces a degenerate manifold of equivalent parameterizations.
+
+\paragraph{Single-term search vs.\ multi-term with $L_1$.}
+A natural alternative to our candidate-by-candidate search is to instantiate
+all 27 separable terms simultaneously and apply $L_1$ regularization to the
+coefficients to encourage sparsity.  In practice, this approach over-prunes:
+with 60+ competing terms (27 for each velocity component plus cross-terms),
+the $L_1$ penalty suppresses the correct term before the optimizer can
+distinguish it from its neighbors.  Single-term search avoids this failure mode
+by giving each candidate the full optimization budget in isolation.
+
+\paragraph{Effect of normalization.}
+Without the normalization step, snapping must operate directly on the raw
+learned parameters, which carry arbitrary phase offsets
+($b \approx -\pi$, $-\pi/2$) and exponential biases ($b \approx 0.6$).
+Rounding these values to the nearest ``clean'' constants introduces errors of
+$0.005$--$0.02$, two to five orders of magnitude worse than snapping after
+normalization.  The normalization step is therefore essential for exact
+recovery.
+
+\paragraph{Candidate pool coverage.}
+Among the 27 candidates searched for each velocity component, the top~4
+candidates all achieve final loss below $10^{-7}$.  These correspond to the
+four function triples that are related to the ground truth by the
+$\sin\leftrightarrow\cos$ phase-shift equivalence (e.g.,
+$\sin\!\cdot\!\sin\!\cdot\!\exp$ and $\cos\!\cdot\!\cos\!\cdot\!\exp$ for the
+$u$-component both encode $\sin(x)\cos(y)\exp(-t/5)$ under suitable phase
+offsets).  The remaining 23 candidates converge to losses above $10^{-2}$,
+providing a clear separation that makes candidate selection unambiguous.

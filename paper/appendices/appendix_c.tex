@@ -1,0 +1,96 @@
+\section{Reproducibility}
+\label{app:reproducibility}
+
+We provide full details necessary to reproduce every experiment
+reported in this paper.
+
+\subsection{Code Availability}
+
+All source code is publicly available at
+\url{https://github.com/gaius050526/torch-eml} under the MIT license.
+The library, \texttt{torch-eml} v0.1.0, is implemented entirely in
+PyTorch and can be installed directly from the repository.
+
+\subsection{Library Structure}
+
+The codebase is organized into the following key modules:
+
+\begin{itemize}
+  \item \texttt{torch\_eml.primitives} --- Verified EML constructions
+    providing the atomic building blocks of the framework:
+    \texttt{EMLExp}, \texttt{EMLLn}, \texttt{EMLSin},
+    \texttt{EMLCos}, and \texttt{EMLPi}.
+  \item \texttt{torch\_eml.compose} --- Higher-level architectures for
+    composing primitives into multi-variable expressions, including
+    \texttt{ComposeHead}, \texttt{SeparableTerm}, and
+    \texttt{AxisTerm}.
+  \item \texttt{torch\_eml.symbolic} --- Symbolic extraction and
+    snapping utilities that convert trained network parameters into
+    closed-form SymPy expressions.
+\end{itemize}
+
+\subsection{Dependencies}
+
+\begin{itemize}
+  \item PyTorch $\geq$ 2.0
+  \item SymPy $\geq$ 1.12
+\end{itemize}
+
+No additional dependencies beyond standard Python scientific libraries
+are required.
+
+\subsection{Hardware}
+
+All experiments reported in this paper were run on a single CPU (Apple
+M-series). No GPU is required. The complete Taylor--Green vortex search,
+including both the search and fine-tuning phases, completes in
+approximately two minutes on this hardware.
+
+\subsection{Random Seed}
+
+All experiments use a fixed random seed for reproducibility:
+\begin{verbatim}
+  torch.manual_seed(42)
+\end{verbatim}
+
+\subsection{Hyperparameters for the Taylor--Green Experiment}
+
+Table~\ref{tab:hyperparams} summarizes the hyperparameters used for
+the Taylor--Green vortex experiment.
+
+\begin{table}[h]
+\centering
+\caption{Hyperparameters for the Taylor--Green vortex experiment.}
+\label{tab:hyperparams}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Training data points     & 3000 \\
+Spatial domain           & $x, y \sim \mathcal{U}[0,\, 2\pi]$ \\
+Temporal domain          & $t \sim \mathcal{U}[0,\, 1]$ \\
+Function basis           & $\{\sin,\, \cos,\, \exp\}$ \\
+\midrule
+\multicolumn{2}{l}{\textit{Search phase}} \\
+\quad Steps              & 2000 per candidate \\
+\quad Optimizer          & Adam \\
+\quad Learning rate      & 0.01 \\
+\quad Gradient clipping  & 1.0 \\
+\midrule
+\multicolumn{2}{l}{\textit{Fine-tune phase}} \\
+\quad Steps              & 5000 \\
+\quad Optimizer          & Adam \\
+\quad Learning rate      & 0.005 \\
+\quad Gradient clipping  & 1.0 \\
+\midrule
+Snap tolerance           & 0.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Test Suite}
+
+The repository includes a comprehensive test suite comprising 117
+tests that cover all modules, including primitive correctness,
+composition semantics, symbolic extraction, and end-to-end integration.
+All tests pass under the released version of the library.

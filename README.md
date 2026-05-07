@@ -10,6 +10,8 @@ eml(x, y) = eˣ - ln(y)
 
 One function. Recursed. Every elementary function emerges.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gaius050526/torch-eml/blob/main/notebooks/quickstart.ipynb)
+
 ## Install
 
 ```bash
@@ -72,6 +74,33 @@ Input features [batch, n]
   Closed-form equation
 ```
 
+## Auto-Tuning & Structure Search
+
+Don't know the right tree depth? Let `torch-eml` find it:
+
+```python
+from torch_eml import auto_depth, search
+
+# Auto-tune: try depths 2-6, pick best by validation loss
+result = auto_depth(n_inputs=1, X=X, y=y, depths=(2, 3, 4, 5, 6), epochs=1000)
+print(result.depth, result.val_loss)
+
+# Full search: auto-depth → prune → fine-tune → snap → equation
+result = search(n_inputs=1, X=X, y=y, max_depth=5, epochs=1000)
+print(result.expression.string)  # cleaned symbolic equation
+```
+
+## Visualization
+
+Inspect your tree in the browser:
+
+```python
+from torch_eml import save_html
+
+save_html(head, "tree.html", equation=expr.string)
+# Open tree.html — interactive tree with hover tooltips
+```
+
 ## API
 
 ### `EMLHead(n_inputs, depth=4)`
@@ -126,6 +155,18 @@ Snap weights to clean values (0, 1, -1, π, e, √2, etc.).
 
 Remove low-contribution branches. Returns `PruneReport`.
 
+### `auto_depth(n_inputs, X, y, depths=(2,3,4,5,6))`
+
+Try multiple tree depths, return the best by validation loss. Returns `SearchResult`.
+
+### `search(n_inputs, X, y, max_depth=6)`
+
+Full pipeline: auto-depth → iterative prune + fine-tune → snap. Returns `SearchResult` with the symbolic expression.
+
+### `save_html(tree_or_head, path, equation=None)`
+
+Generate interactive HTML visualization of the tree. Nodes show weights on hover, pruned nodes are grayed out.
+
 ## Examples
 
 See [`examples/`](examples/) for complete runnable scripts:
@@ -133,6 +174,10 @@ See [`examples/`](examples/) for complete runnable scripts:
 1. **Symbolic Regression** — Discover `sin(x)` from data
 2. **Drop-in Head** — Replace MLP classification head with interpretable EML head
 3. **LLM Trunk** — Claude extracts features → EML head produces a scoring equation
+4. **Auto Search** — Auto-tune depth, prune, fine-tune, snap, and visualize
+5. **Physics Rediscovery** — Recover Kepler's law, inverse square law, and kinetic energy from noisy data
+6. **MLP vs EML** — Same accuracy, but only EML gives you the equation
+7. **Navier-Stokes** — Physics-informed EML: discover closed-form PDE solutions
 
 ## How It Works
 
@@ -153,7 +198,7 @@ The equation is not an approximation — it's a closed-form expression you can p
 @article{odrzywolel2026,
   title={All elementary functions from a single binary operator},
   author={Odrzywo{\l}ek, Andrzej},
-  journal={arXiv preprint arXiv:2503.20022},
+  journal={arXiv preprint arXiv:2603.21852},
   year={2026}
 }
 
@@ -170,7 +215,7 @@ The equation is not an approximation — it's a closed-form expression you can p
 Contributions welcome. Please open an issue first to discuss what you'd like to change.
 
 ```bash
-git clone https://github.com/torch-eml/torch-eml.git
+git clone https://github.com/gaius050526/torch-eml.git
 cd torch-eml
 pip install -e ".[dev]"
 pytest

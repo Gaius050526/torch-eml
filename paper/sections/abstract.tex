@@ -1,0 +1,24 @@
+\begin{abstract}
+Neural PDE solvers such as physics-informed neural networks (PINNs) can approximate
+solutions to partial differential equations with high accuracy, yet they produce opaque
+weight matrices rather than interpretable mathematical expressions.
+We present a method for discovering closed-form symbolic solutions to PDEs using
+compositions of verified elementary function primitives derived from the EML
+(Exp-Minus-Log) function $\mathrm{eml}(x,y) = e^{x} - \ln y$, recently shown by
+Odrzywo{\l}ek to constitute a universal function basis~\cite{odrzywołek2026}.
+Rather than optimizing over raw EML expression trees---where even multiplication
+requires a reverse-Polish representation of length~41---we construct verified
+implementations of $\sin$, $\cos$, $\exp$, and $\ln$ from the base EML operation
+via algebraic identities and treat these as differentiable building blocks.
+Our \textsc{ComposeHead} architecture searches over trainable linear combinations
+of separable products of axis-aligned primitives, reducing the optimization problem
+from fitting arbitrary network weights to identifying a small set of symbolic
+coefficients.
+A post-training normalization and coefficient-snapping pipeline converts the learned
+representation into exact symbolic form.
+We demonstrate the approach on the two-dimensional Navier--Stokes equations, where
+it recovers the Taylor--Green vortex solution
+$u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
+at machine precision (pointwise error ${<}\,10^{-6}$), yielding a fully interpretable,
+closed-form expression directly from data.
+\end{abstract}
