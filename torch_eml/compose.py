@@ -248,6 +248,7 @@ class SeparableTerm(nn.Module):
 
         - For exp factors: absorb exp(b) into the coefficient, set b=0
         - For sin/cos factors: reduce b to [-π, π] range, absorb sign flips
+        - Convert sin↔cos when bias ≈ ±π/2
         """
         with torch.no_grad():
             for f in self.factors:
@@ -270,6 +271,27 @@ class SeparableTerm(nn.Module):
                         else:
                             b += math.pi
                         self.coeff.mul_(-1.0)
+                    # Convert sin↔cos when bias ≈ ±π/2
+                    # sin(x + π/2) = cos(x), sin(x - π/2) = -cos(x)
+                    # cos(x + π/2) = -sin(x), cos(x - π/2) = sin(x)
+                    if abs(abs(b) - math.pi / 2) < 0.3:
+                        if f.func_name == "sin":
+                            if b > 0:  # sin(x + π/2) = cos(x)
+                                f.func_name = "cos"
+                                f._funcs["cos"] = EMLCos()
+                            else:  # sin(x - π/2) = -cos(x)
+                                f.func_name = "cos"
+                                f._funcs["cos"] = EMLCos()
+                                self.coeff.mul_(-1.0)
+                        else:  # cos
+                            if b > 0:  # cos(x + π/2) = -sin(x)
+                                f.func_name = "sin"
+                                f._funcs["sin"] = EMLSin()
+                                self.coeff.mul_(-1.0)
+                            else:  # cos(x - π/2) = sin(x)
+                                f.func_name = "sin"
+                                f._funcs["sin"] = EMLSin()
+                        b = 0.0
                     f.b.fill_(b)
             # If coeff is negative for a product, we can flip sign of one sin factor
             # sin(x) = -sin(-x) → flip a and b signs
