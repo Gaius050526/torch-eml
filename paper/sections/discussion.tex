@@ -110,6 +110,68 @@ completeness of the primitive basis, but the practical
 contributions---normalization and search strategy---are independent of the EML
 implementation and would apply equally to any library of elementary functions.
 
+\paragraph{EML branch closure: predicting solution existence.}
+The EML-derived primitives naturally partition into three \emph{branches}
+based on their behavior under differentiation and multiplication:
+\textbf{Branch~E} ($\exp$), which is closed under both operations;
+\textbf{Branch~T} ($\sin$, $\cos$), which is closed under differentiation
+but generates new frequencies under multiplication
+($\sin a \cdot \sin b \to \cos(a\!-\!b) - \cos(a\!+\!b)$); and
+\textbf{Branch~L} ($\ln$), which is not closed under differentiation
+($\mathrm{d}/\mathrm{d}x\;\ln x = 1/x$).  A PDE's nonlinear operator~$N$
+maps solutions from one branch combination to another, and the existence of
+exact separable solutions depends on whether this mapping \emph{closes}:
+\begin{itemize}
+  \item \textbf{Direct closure.}  If $N$ maps a branch back to itself
+    (as linear operators do for Branch~T), exact separable solutions exist
+    generically.  The heat and wave equations fall into this category.
+  \item \textbf{Gradient closure.}  If $N$ generates terms outside the
+    branch but those terms are a pure gradient---absorbable into an
+    auxiliary variable such as pressure---the equation is effectively
+    closed.  The 2-D Navier--Stokes equations satisfy this condition:
+    the quadratic term $(\mathbf{u}\!\cdot\!\nabla)\mathbf{u}$ produces
+    $\sin(2x)$ from $\sin(x)$, but this equals
+    $\partial_x[-\tfrac{1}{4}\cos(2x)]$ and is absorbed into~$\nabla p$.
+  \item \textbf{No closure.}  When neither mechanism applies, the
+    nonlinearity generates irreducible new modes, and no finite
+    separable solution exists.
+\end{itemize}
+This framework yields verifiable predictions.  We tested it on eight PDEs
+(Table~\ref{tab:branch}): the Burgers, KdV, and nonlinear Schr\"{o}dinger
+equations all fail closure in Branch~T, which the PDE-residual solver
+confirms by producing residuals orders of magnitude above machine precision.
+The 3-D non-Beltrami Navier--Stokes equations fail gradient closure
+because vortex stretching introduces an irreducible term
+(Section~\ref{sec:3d_ns}).  All four predictions of success and all four
+predictions of failure were confirmed computationally, suggesting that
+branch closure analysis can serve as a \emph{pre-screening tool}
+that identifies which PDEs are amenable to separable symbolic
+recovery before any optimization is attempted.
+
+\begin{table}[t]
+  \centering
+  \caption{EML branch closure predictions and computational verification.
+    ``Closure'' indicates the mechanism by which the nonlinear term stays
+    within the separable hypothesis class.  All predictions were confirmed.}
+  \label{tab:branch}
+  \smallskip
+  \begin{tabular}{@{}llcll@{}}
+    \toprule
+    PDE & Nonlinearity & Branch & Closure & Outcome \\
+    \midrule
+    1-D Heat       & Linear    & T & Direct   & Exact recovery \\
+    1-D Wave       & Linear    & T & Direct   & Exact recovery \\
+    2-D Navier--Stokes & Quadratic & T & Gradient & Exact recovery \\
+    3-D NS (Beltrami)  & Quadratic & T & Beltrami & Exact recovery \\
+    \midrule
+    3-D NS (non-Beltrami) & Quadratic & T & Fails & Correct failure \\
+    1-D Burgers    & Quadratic & T,E & Fails  & Correct failure \\
+    1-D KdV        & Quadratic & T & Fails    & Correct failure \\
+    NLS standing wave & Cubic  & T & Fails    & Correct failure \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \paragraph{Comparison to symbolic regression.}
 PySR~\cite{cranmer2023} and AI~Feynman~\cite{udrescu2020} search over arbitrary
 expression trees and are strictly more general: they can discover algebraic
