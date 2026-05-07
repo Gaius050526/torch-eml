@@ -30,7 +30,7 @@ import sympy
 import torch
 import torch.nn as nn
 
-from torch_eml.primitives import EMLExp, EMLLn, EMLSin, EMLCos
+from torch_eml.primitives import EMLExp, EMLLn, EMLSin, EMLCos, EMLTanh, EMLSech
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ class PrimitiveTerm(nn.Module):
             "cos": EMLCos(),
             "exp": EMLExp(),
             "ln": EMLLn(),
+            "tanh": EMLTanh(),
+            "sech": EMLSech(),
             "id": None,       # identity: f(x) = x
             "sq": None,       # square: f(x) = x²
             "inv": None,      # inverse: f(x) = 1/x
@@ -90,6 +92,8 @@ class PrimitiveTerm(nn.Module):
             "cos": sympy.cos,
             "exp": sympy.exp,
             "ln": sympy.log,
+            "tanh": sympy.tanh,
+            "sech": lambda x: 1 / sympy.cosh(x),
             "id": lambda x: x,
             "sq": lambda x: x ** 2,
             "inv": lambda x: 1 / x,
@@ -189,6 +193,8 @@ class AxisTerm(nn.Module):
             "cos": EMLCos(),
             "exp": EMLExp(),
             "ln": EMLLn(),
+            "tanh": EMLTanh(),
+            "sech": EMLSech(),
         }
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -210,6 +216,7 @@ class AxisTerm(nn.Module):
         func_map = {
             "sin": sympy.sin, "cos": sympy.cos,
             "exp": sympy.exp, "ln": sympy.log,
+            "tanh": sympy.tanh, "sech": lambda x: 1 / sympy.cosh(x),
             "id": lambda x: x,
         }
         outer = func_map[self.func_name](inner)
@@ -293,11 +300,29 @@ class SeparableTerm(nn.Module):
                                 f._funcs["sin"] = EMLSin()
                         b = 0.0
                     f.b.fill_(b)
-            # If coeff is negative for a product, we can flip sign of one sin factor
-            # sin(x) = -sin(-x) → flip a and b signs
+                elif f.func_name == "tanh":
+                    # tanh(-x) = -tanh(x): ensure a > 0, absorb sign into coeff
+                    if f.a.item() < 0:
+                        f.a.mul_(-1.0)
+                        f.b.mul_(-1.0)
+                        self.coeff.mul_(-1.0)
+                    # Absorb bias: tanh has no clean phase identities like sin/cos
+                    # but tanh(a*x + b) with b ≈ 0 → set b = 0
+                    if abs(f.b.item()) < 0.05:
+                        f.b.fill_(0.0)
+                elif f.func_name == "sech":
+                    # sech(-x) = sech(x): ensure a > 0
+                    if f.a.item() < 0:
+                        f.a.mul_(-1.0)
+                        f.b.mul_(-1.0)
+                    # sech is even, so b sign doesn't matter for sign of output
+                    if abs(f.b.item()) < 0.05:
+                        f.b.fill_(0.0)
+            # If coeff is negative for a product, we can flip sign of one odd factor
+            # sin(x) = -sin(-x), tanh(x) = -tanh(-x) → flip a and b signs
             if self.coeff.item() < 0:
                 for f in self.factors:
-                    if f.func_name == "sin":
+                    if f.func_name in ("sin", "tanh"):
                         self.coeff.mul_(-1.0)
                         f.a.mul_(-1.0)
                         f.b.mul_(-1.0)

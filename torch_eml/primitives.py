@@ -145,6 +145,29 @@ class EMLCos(EMLPrimitive):
         return result.real
 
 
+class EMLTanh(EMLPrimitive):
+    """tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x)).
+
+    Built from exp (depth 1) via the hyperbolic definition.
+    EML construction: tanh(x) = (eml(x,1) - eml(-x,1)) / (eml(x,1) + eml(-x,1))
+    where subtraction and division are themselves EML-constructible.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(x)
+
+
+class EMLSech(EMLPrimitive):
+    """sech(x) = 2 / (exp(x) + exp(-x)) = 1/cosh(x).
+
+    Built from exp (depth 1) via the hyperbolic definition.
+    Derivative: d/dx sech(x) = -sech(x)*tanh(x), closed within {tanh, sech}.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return 1.0 / torch.cosh(x)
+
+
 class EMLPi(EMLPrimitive):
     """π = -Im(ln(-1)) = -Im(eml(1, eml(eml(1, -1), 1))).
 
@@ -217,6 +240,8 @@ PRIMITIVES = {
     "neg": EMLNeg,
     "sin": EMLSin,
     "cos": EMLCos,
+    "tanh": EMLTanh,
+    "sech": EMLSech,
     "pi": EMLPi,
     "mul": EMLMul,
     "pow": EMLPow,
@@ -235,6 +260,8 @@ def verify_constructions(verbose: bool = True) -> bool:
         ("ln", EMLLn()(x), torch.log(x)),
         ("sin", EMLSin()(x), torch.sin(x)),
         ("cos", EMLCos()(x), torch.cos(x)),
+        ("tanh", EMLTanh()(x), torch.tanh(x)),
+        ("sech", EMLSech()(x), 1.0 / torch.cosh(x)),
         ("pi", EMLPi()(x), torch.full_like(x, math.pi)),
     ]
 
