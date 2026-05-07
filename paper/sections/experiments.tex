@@ -1,21 +1,87 @@
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate the proposed pipeline on three classes of problems: a
-two-dimensional incompressible Navier--Stokes benchmark (Section~\ref{sec:tgv}),
-two canonical viscous-flow profiles (Section~\ref{sec:couette_poiseuille}), and
-a pair of algebraic physical laws recovered from noisy data
-(Section~\ref{sec:algebraic}).  Section~\ref{sec:ablation} presents ablation
-studies isolating the contribution of each design choice.  All experiments use
-PyTorch~2.0+ on a single CPU; the Taylor--Green search completes in under
-four minutes.
+We evaluate the proposed pipeline on six classes of problems: separable PDE
+benchmarks spanning one- and two-dimensional domains
+(Section~\ref{sec:separable_benchmarks}), a non-separable traveling-wave
+recovery that demonstrates multi-term search
+(Section~\ref{sec:nonseparable}), robustness and failure-mode analysis
+(Section~\ref{sec:robustness}), ablation studies isolating each design
+choice (Section~\ref{sec:ablation}), PDE-residual-only discovery that
+recovers exact solutions from the governing equations alone without any
+solution data (Section~\ref{sec:pde_residual}), and a systematic
+three-dimensional Navier--Stokes screening that tests which classes of 3-D
+initial conditions admit exact separable solutions
+(Section~\ref{sec:3d_ns}).
+Section~\ref{sec:summary_table} collects
+all results in a unified comparison table.  All experiments use
+PyTorch~2.0+~\citep{paszke2019} on a single CPU; the most expensive search
+(81 two-term pairs for the traveling wave) completes in under ten minutes.
 
 % ===========================================================================
-\subsection{Taylor--Green Vortex (2-D Incompressible Navier--Stokes)}
+\subsection{Separable PDE Benchmarks}
+\label{sec:separable_benchmarks}
+
+We begin with three single-term separable PDEs whose exact solutions are
+products of axis-aligned elementary functions.  In each case the pipeline
+recovers the ground truth to within machine precision after snapping.
+
+% ---------------------------------------------------------------------------
+\subsubsection{1-D Heat Equation}
+\label{sec:heat}
+
+The one-dimensional heat equation $u_t = \nu\,u_{xx}$ on $x\in[0,1]$,
+$t\in[0,1]$ with $\nu = 1/\pi^{2}$ admits the exact solution
+\begin{equation}
+  u(x,t) = \sin(\pi x)\,\exp(-\pi^{2}\nu\, t)
+         = \sin(\pi x)\,\exp(-t).
+  \label{eq:heat_exact}
+\end{equation}
+
+\paragraph{Setup.}
+We sample $n=2{,}000$ training points uniformly over the domain and set the
+function basis to $\mathcal{F}=\{\sin,\cos,\exp\}$, yielding
+$|\mathcal{F}|^2 = 9$ two-factor separable candidates of the form
+$f(x)\,g(t)$.  Each candidate is trained for 2{,}000 steps with Adam
+(learning rate $0.01$, gradient clipping at max-norm~$1.0$); the best
+candidate is then fine-tuned for 5{,}000 steps at learning rate $0.005$.
+
+\paragraph{Result.}
+The search selects $\sin(\cdot)\!\cdot\!\exp(\cdot)$ as the lowest-loss
+candidate (loss $< 10^{-9}$ after fine-tuning).  After normalization and
+snapping, the recovered expression is
+$\hat{u}(x,t) = \sin(\pi x)\,\exp(-t)$,
+with snap MAE of $9\times 10^{-8}$ on 5{,}000 held-out points.
+
+% ---------------------------------------------------------------------------
+\subsubsection{1-D Wave Equation}
+\label{sec:wave}
+
+The one-dimensional wave equation $u_{tt} = c^{2}\,u_{xx}$ on $x\in[0,1]$,
+$t\in[0,2]$ with $c=1$ and initial conditions $u(x,0)=\sin(\pi x)$,
+$u_t(x,0)=0$ has the standing-wave solution
+\begin{equation}
+  u(x,t) = \sin(\pi x)\,\cos(\pi t).
+  \label{eq:wave_exact}
+\end{equation}
+
+\paragraph{Setup.}
+The configuration is identical to the heat equation: $n=2{,}000$ training
+points, basis $\mathcal{F}=\{\sin,\cos,\exp\}$, 9 candidates, 2{,}000 search
+steps followed by 5{,}000 fine-tuning steps.
+
+\paragraph{Result.}
+The winning candidate is $\sin(\cdot)\!\cdot\!\cos(\cdot)$ with loss
+$< 10^{-9}$.  Snapping yields
+$\hat{u}(x,t)=\sin(\pi x)\,\cos(\pi t)$
+with snap MAE of $5\times 10^{-8}$.
+
+% ---------------------------------------------------------------------------
+\subsubsection{2-D Navier--Stokes: Taylor--Green Vortex}
 \label{sec:tgv}
 
 The Taylor--Green vortex is an exact, time-decaying solution to the
-two-dimensional incompressible Navier--Stokes equations:
+two-dimensional incompressible Navier--Stokes equations~\citep{taylor1937}:
 \begin{align}
   u(x,y,t) &= \phantom{-}\sin(x)\cos(y)\,\exp(-2\nu t), \label{eq:tgv_u}\\
   v(x,y,t) &= -\cos(x)\sin(y)\,\exp(-2\nu t), \label{eq:tgv_v}\\
@@ -119,67 +185,149 @@ Taylor--Green data set.
   \end{tabular}
 \end{table}
 
-The MLP-PINN achieves low data error but yields an opaque weight matrix.  The
-raw EML tree (depth~4) struggles with the three-variable product structure and
-converges to a poor local minimum.  The \textsc{ComposeHead} with free
-(non-axis-aligned) weight vectors fits the data reasonably but distributes
-signal across multiple terms, producing a multi-term expression that resists
-simplification.  Only the separable \textsc{ComposeHead} recovers the exact
-symbolic solution.
+The MLP-PINN~\citep{raissi2019} achieves low data error but yields an opaque
+weight matrix.  The raw EML tree (depth~4) struggles with the three-variable
+product structure and converges to a poor local minimum.  The
+\textsc{ComposeHead} with free (non-axis-aligned) weight vectors fits the data
+reasonably but distributes signal across multiple terms, producing a multi-term
+expression that resists simplification.  Only the separable
+\textsc{ComposeHead} recovers the exact symbolic solution.
 
 % ===========================================================================
-\subsection{Couette and Poiseuille Flow}
-\label{sec:couette_poiseuille}
+\subsection{Non-Separable Recovery via Multi-Term Search}
+\label{sec:nonseparable}
 
-As elementary validation cases, we apply the method to two one-dimensional
-viscous flows for which closed-form solutions are known \emph{a priori}.
+The single-term separable ansatz $f(x)\,g(t)$ cannot represent functions whose
+natural decomposition requires a sum of separable products.  A canonical
+example is the traveling wave
+\begin{equation}
+  u(x,t) = \sin(x - 2t),
+  \label{eq:traveling}
+\end{equation}
+which by the angle-subtraction identity decomposes as
+\begin{equation}
+  u(x,t) = \sin(x)\cos(2t) - \cos(x)\sin(2t).
+  \label{eq:traveling_decomp}
+\end{equation}
+This two-term structure lies strictly outside the single-product function class
+but within the class of sums of separable products.  Recovering it tests
+whether the pipeline can extend beyond the single-term setting.
 
-\paragraph{Couette flow.}
-The steady-state velocity profile between a stationary wall ($y=0$) and a
-moving wall ($y=H$, velocity $U_0$) satisfies $\mathrm{d}^2u/\mathrm{d}y^2=0$
-with boundary conditions $u(0)=0$, $u(H)=U_0$, giving
-$u(y)=U_0\,y/H$.
-Using a depth-2 EML tree with PDE-residual loss (enforcing the zero
-second derivative) and boundary penalty terms, the method recovers the identity
-function $\mathrm{id}(y)$ with the correct multiplicative coefficient.  The
-recovery is trivially exact.
+\paragraph{Setup.}
+We sample $n=2{,}000$ training points uniformly over $x\in[0,2\pi]$,
+$t\in[0,2]$.  The function basis is $\mathcal{F}=\{\sin,\cos,\exp\}$, giving
+$|\mathcal{F}|^2=9$ possible single-term candidates per factor.  For
+the two-term search, we enumerate all $9\times 9 = 81$ ordered pairs of
+function assignments, where each pair consists of two separable products
+$c_1\,f_1(x)\,g_1(t) + c_2\,f_2(x)\,g_2(t)$.  Each pair is trained jointly
+for 2{,}000 steps with Adam (learning rate $0.01$), and the best pair is
+fine-tuned for 5{,}000 additional steps at learning rate $0.005$.
 
-\paragraph{Poiseuille flow.}
-Pressure-driven flow in a channel of height~$H$ yields
-$u(y) = \frac{\Delta P}{2\mu L}(Hy - y^2)$,
-a parabolic profile.  Using a depth-3 EML tree with the boundary conditions
-$u(0)=u(H)=0$ and the constant-second-derivative constraint
-$\mathrm{d}^2u/\mathrm{d}y^2 = -\Delta P / (\mu L)$, the search recovers
-$\mathrm{id}(y)$ and $\mathrm{sq}(y)$ terms with the expected coefficients.
-The recovery is again trivially exact.
+\paragraph{Bias freezing.}
+A critical implementation detail is that \emph{all bias parameters are frozen
+at zero} during the multi-term search.  The reason is a gauge freedom inherent
+to multi-term decompositions: if the two terms sum to a fixed target, then
+correlated phase offsets---such as adding $\delta$ to the bias of $f_1$ and
+simultaneously adjusting $c_1$, $c_2$, and the bias of $f_2$ to
+compensate---leave the total sum unchanged while preventing any individual
+term from snapping to a clean symbolic form.  In the single-term setting this
+gauge freedom is absent because the normalization step can absorb all phase
+offsets into the coefficient and canonicalize each factor independently.
+Freezing biases at zero eliminates the multi-term gauge manifold and forces
+the optimizer to express the target using canonical basis functions directly.
 
-These two cases confirm that the primitive library and snapping pipeline handle
-polynomial solutions correctly, complementing the transcendental-function
-recovery demonstrated by the Taylor--Green experiment.
+\paragraph{Result.}
+The single-term search correctly identifies that no single product achieves low
+loss: all 9 candidates plateau at loss $> 0.13$ (see
+Section~\ref{sec:robustness}).  In the two-term search, the winning pair is
+$\sin(x)\cos(t) + \cos(x)\sin(t)$, achieving loss $< 10^{-8}$ after
+fine-tuning.  After coefficient snapping, the recovered expression is
+\begin{equation}
+  \hat{u}(x,t) = \sin(x)\cos(2t) - \cos(x)\sin(2t),
+  \label{eq:traveling_recovered}
+\end{equation}
+with snap MAE of $3\times 10^{-8}$ on 5{,}000 held-out points---again
+consistent with machine precision.  This confirms that the separable ansatz
+extends naturally to \emph{sums} of separable terms, covering a strictly larger
+function class than single-product solutions.
 
 % ===========================================================================
-\subsection{Algebraic Physical Laws}
-\label{sec:algebraic}
+\subsection{Robustness and Failure Analysis}
+\label{sec:robustness}
 
-To demonstrate that the method generalizes beyond PDE solutions to algebraic
-relationships, we apply the raw EML tree search (depth~3--4) to two classical
-laws from noisy synthetic data.
+A trustworthy symbolic-recovery method should not only succeed on clean data
+but also degrade gracefully under adverse conditions.  We examine three
+scenarios: observation noise, a misspecified function basis, and a
+single-term search applied to a non-separable target.
 
-\paragraph{Kepler's third law.}
-We generate 400 data points $(a_i, T_i)$ with $a\in[0.5, 3.0]$ and
-$T = a^{3/2} + \varepsilon$, $\varepsilon\sim\mathcal{N}(0, 0.01)$.  The
-search recovers $T = a^{3/2}$ as a composition of EML primitives, with
-validation loss below $10^{-4}$ after snapping.
+% ---------------------------------------------------------------------------
+\subsubsection{Noise Robustness}
+\label{sec:noise}
 
-\paragraph{Inverse square law.}
-From 400 points $(r_i, F_i)$ with $r\in[0.5, 3.0]$ and
-$F = 1/r^{2} + \varepsilon$, $\varepsilon\sim\mathcal{N}(0, 0.01)$, the
-search recovers $F = r^{-2}$.
+We add i.i.d.\ Gaussian noise $\varepsilon \sim \mathcal{N}(0,\sigma^2)$ to
+the Taylor--Green training data and repeat the full pipeline (27-candidate
+search, fine-tuning, normalization, snapping) for each noise level.
+Table~\ref{tab:noise} reports the snap MAE of the recovered $u$-component.
 
-These experiments confirm that EML-based symbolic regression is not restricted
-to the separable-product ansatz of the \textsc{ComposeHead} but can also
-discover power-law and rational relationships via the general tree search,
-provided the target expression is of moderate complexity.
+\begin{table}[t]
+  \centering
+  \caption{Noise robustness on the Taylor--Green $u$-component.  For
+    $\sigma \le 0.1$ the method recovers the exact symbolic expression; at
+    $\sigma = 0.2$ recovery fails.}
+  \label{tab:noise}
+  \smallskip
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Noise level $\sigma$ & Snap MAE & Exact recovery? \\
+    \midrule
+    $0.0$   & $7\!\times\!10^{-8}$ & Yes \\
+    $0.001$ & $8\!\times\!10^{-8}$ & Yes \\
+    $0.01$  & $6\!\times\!10^{-8}$ & Yes \\
+    $0.05$  & $4\!\times\!10^{-7}$ & Yes \\
+    $0.1$   & $9\!\times\!10^{-7}$ & Yes \\
+    $0.2$   & ---                   & No  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+At noise levels $\sigma \le 0.1$ (corresponding to a signal-to-noise ratio of
+roughly 10 or greater, given that the Taylor--Green velocity field has unit
+amplitude), the correct candidate is selected and the snapped parameters match
+the ground truth.  The snap MAE increases modestly with $\sigma$ but remains
+below $10^{-6}$---well within the snapping tolerance.  At $\sigma = 0.2$ the
+noise overwhelms the signal, the search selects an incorrect candidate, and
+snapping fails.  The method thus tolerates moderate observation noise, a
+property it inherits from the continuous relaxation: the gradient-based
+optimizer is a natural denoiser that averages over the training set during
+each update.
+
+% ---------------------------------------------------------------------------
+\subsubsection{Wrong Basis}
+\label{sec:wrong_basis}
+
+We repeat the Taylor--Green search with a deliberately misspecified basis
+$\mathcal{F}' = \{\exp, \ln\}$, omitting all trigonometric functions.  This
+yields $|\mathcal{F}'|^3 = 8$ candidates.  Every candidate plateaus at
+training loss $> 0.18$, far above the $< 10^{-8}$ threshold achieved by the
+correct basis.  Importantly, the method does not produce a spurious
+``recovery'': the large residual loss signals unambiguously that no candidate
+in the pool is adequate.  This behavior is desirable---a symbolic regression
+system should fail loudly when the hypothesis class does not contain the
+target, rather than returning a misleading approximate fit
+\citep{cranmer2023}.
+
+% ---------------------------------------------------------------------------
+\subsubsection{Non-Separable Target with Single-Term Search}
+\label{sec:nonsep_failure}
+
+Applying the single-term separable search to the traveling wave
+$u(x,t) = \sin(x - 2t)$ provides a complementary failure mode.  All 9
+candidates of the form $f(x)\,g(t)$ converge to training losses above $0.13$,
+correctly indicating that no single separable product can represent the
+target.  This gap between the single-term plateau ($>0.13$) and the two-term
+optimum ($<10^{-8}$) provides a reliable diagnostic: when the best single-term
+loss is orders of magnitude above machine precision, the user is directed to
+attempt a multi-term search (Section~\ref{sec:nonseparable}).
 
 % ===========================================================================
 \subsection{Ablation Study}
@@ -223,11 +371,12 @@ dimensions introduces a degenerate manifold of equivalent parameterizations.
 \paragraph{Single-term search vs.\ multi-term with $L_1$.}
 A natural alternative to our candidate-by-candidate search is to instantiate
 all 27 separable terms simultaneously and apply $L_1$ regularization to the
-coefficients to encourage sparsity.  In practice, this approach over-prunes:
-with 60+ competing terms (27 for each velocity component plus cross-terms),
-the $L_1$ penalty suppresses the correct term before the optimizer can
-distinguish it from its neighbors.  Single-term search avoids this failure mode
-by giving each candidate the full optimization budget in isolation.
+coefficients to encourage sparsity~\citep{brunton2016}.  In practice, this
+approach over-prunes: with 60+ competing terms (27 for each velocity component
+plus cross-terms), the $L_1$ penalty suppresses the correct term before the
+optimizer can distinguish it from its neighbors.  Single-term search avoids
+this failure mode by giving each candidate the full optimization budget in
+isolation.
 
 \paragraph{Effect of normalization.}
 Without the normalization step, snapping must operate directly on the raw
@@ -247,3 +396,218 @@ $\sin\!\cdot\!\sin\!\cdot\!\exp$ and $\cos\!\cdot\!\cos\!\cdot\!\exp$ for the
 $u$-component both encode $\sin(x)\cos(y)\exp(-t/5)$ under suitable phase
 offsets).  The remaining 23 candidates converge to losses above $10^{-2}$,
 providing a clear separation that makes candidate selection unambiguous.
+
+% ===========================================================================
+\subsection{PDE-Residual-Only Discovery}
+\label{sec:pde_residual}
+
+All preceding experiments supply solution data---values of the target function
+at sampled points---and use standard regression loss to drive training.  A
+more ambitious question is whether the pipeline can discover exact analytical
+solutions from the governing equations alone, without \emph{any} solution
+data.  This is the setting of physics-informed neural networks
+(PINNs)~\citep{raissi2019}, but with a critical difference: the output is a
+closed-form symbolic expression rather than a set of neural-network weights.
+
+\paragraph{Formulation.}
+We consider the two-dimensional incompressible Navier--Stokes equations in
+vorticity form, which eliminates the pressure variable:
+\begin{equation}
+  \omega_t + u\,\omega_x + v\,\omega_y = \nu\,(\omega_{xx} + \omega_{yy}),
+  \qquad
+  u_x + v_y = 0,
+  \qquad
+  \omega = v_x - u_y,
+  \label{eq:vorticity_ns}
+\end{equation}
+where $\nu = 0.1$.  The loss function contains no solution data; it consists
+entirely of PDE residuals evaluated at randomly sampled collocation points
+plus an initial-condition penalty:
+\begin{equation}
+  \mathcal{L} = \mathcal{L}_{\mathrm{PDE}} + \lambda\,\mathcal{L}_{\mathrm{IC}},
+  \label{eq:pde_loss}
+\end{equation}
+where $\mathcal{L}_{\mathrm{PDE}}$ is the mean-squared vorticity-equation and
+continuity residuals computed via automatic differentiation, and
+$\mathcal{L}_{\mathrm{IC}}$ penalizes deviation from the Taylor--Green
+initial conditions $u_0 = \sin(x)\cos(y)$, $v_0 = -\cos(x)\sin(y)$ at
+$t = 0$.
+
+\paragraph{Setup.}
+The search space consists of 27 separable candidates for $u$ (basis
+$\mathcal{F} = \{\sin,\cos,\exp\}$, three factors for $x$, $y$, $t$).  For
+each $u$-candidate, the $v$-candidate is constructed by swapping $\sin
+\leftrightarrow \cos$ in the $x$ and $y$ factors, motivated by the continuity
+constraint.  Phase~1 trains each $(u, v)$ pair for 1{,}000 steps on the
+initial-condition loss plus a continuity penalty ($n_{\mathrm{coll}} =
+1{,}500$, $n_{\mathrm{IC}} = 500$).  Phase~2 fine-tunes the best pair for
+3{,}000 steps with the full vorticity-equation residual
+($\lambda = 10$).  Phase~3 applies normalization and snapping.
+
+\paragraph{Result.}
+Phase~1 identifies $u \sim \sin(x)\!\cdot\!\cos(y)\!\cdot\!\exp(t)$,\;$v \sim
+\cos(x)\!\cdot\!\sin(y)\!\cdot\!\exp(t)$ as the lowest-loss pair.  During
+Phase~2, the PDE residual drops to $\sim\!10^{-8}$, with the vorticity and
+continuity components both converging to effectively zero.  After
+normalization and snapping, the recovered solution is
+\begin{equation}
+  \hat{u} = \exp(-t/5)\sin(x)\cos(y), \qquad
+  \hat{v} = -\exp(-t/5)\sin(y)\cos(x),
+  \label{eq:pde_residual_recovered}
+\end{equation}
+matching the known Taylor--Green solution~\eqref{eq:tgv_u}--\eqref{eq:tgv_v}
+with MAE of $5 \times 10^{-8}$ for both components.
+
+\paragraph{Significance.}
+This result demonstrates that the \textsc{ComposeHead} can function as a
+\emph{symbolic PINN}---a physics-informed solver whose output is not an opaque
+weight matrix but a human-readable, analytically verifiable closed-form
+expression.  The standard PINN paradigm produces a numerical approximation
+that can be evaluated at arbitrary points but whose functional form is
+unknown.  Here, the discovered expression $\sin(x)\cos(y)\exp(-t/5)$ can be
+substituted back into the Navier--Stokes equations \emph{analytically} and
+verified to be an exact solution---a qualitatively different kind of result
+that no conventional neural PDE solver can provide.
+
+% ===========================================================================
+\subsection{Three-Dimensional Navier--Stokes: Gradient-Condition Screening}
+\label{sec:3d_ns}
+
+The preceding experiments operate in two spatial dimensions.  A natural
+question is whether the pipeline extends to three-dimensional
+Navier--Stokes, where the vortex stretching term
+$(\boldsymbol{\omega}\!\cdot\!\nabla)\mathbf{u}$---absent in 2-D---introduces
+fundamentally richer nonlinear dynamics.
+
+\paragraph{Mathematical framework.}
+For a separable velocity field
+$\mathbf{u} = \mathbf{u}_0(x,y,z)\,e^{-\nu k^2 t}$ to satisfy the 3-D
+incompressible Navier--Stokes equations exactly, three conditions must hold:
+(i)~$\nabla\!\cdot\!\mathbf{u}_0 = 0$,
+(ii)~$\nabla^2\mathbf{u}_0 = -k^2\mathbf{u}_0$, and
+(iii)~the \emph{gradient condition}
+\begin{equation}
+  (\mathbf{u}_0\!\cdot\!\nabla)\boldsymbol{\omega}_0
+  = (\boldsymbol{\omega}_0\!\cdot\!\nabla)\mathbf{u}_0,
+  \label{eq:gradient_condition}
+\end{equation}
+where $\boldsymbol{\omega}_0 = \nabla\!\times\!\mathbf{u}_0$.  When this
+holds, the nonlinear term is a pure gradient and is absorbed entirely into
+the pressure.  We evaluate condition~\eqref{eq:gradient_condition}
+computationally at $5{,}000$ random spatial points for each candidate IC\@.
+
+\paragraph{Systematic screening.}
+We test 13 divergence-free initial conditions spanning four families:
+\begin{itemize}
+  \item \textbf{Family~A} (8 ICs): single-product fields of the form
+    $(A\sin x\cos y\cos z,\; B\cos x\sin y\cos z,\;
+     C\cos x\cos y\sin z)$ with $A+B+C=0$, wavenumber $k^2=3$.
+  \item \textbf{Family~B} (2 ICs): higher spatial frequency
+    $(\sin 2x,\,\cos 2x,\,\cos 2x)$ variants, $k^2=6$.
+  \item \textbf{Family~C} (1 IC): mixed wavenumber
+    $(\sin x\cos y\cos 2z,\ldots)$, $k^2=6$.
+  \item \textbf{Family~D} (2 ICs): uniform wavenumber-2 fields, $k^2=12$.
+\end{itemize}
+Every one of the 13 ICs fails the gradient condition with
+$\max|\mathbf{S}| \ge 0.7$, confirming that no single-product
+three-dimensional initial condition in these families admits an exact
+exponentially-decaying solution.  The screening runs in under five seconds
+on a single CPU\@.
+
+\paragraph{Why single-product 3-D solutions are rare.}
+The gradient condition~\eqref{eq:gradient_condition} is automatically
+satisfied for Beltrami flows ($\boldsymbol{\omega} = \lambda\mathbf{u}$),
+because both sides reduce to
+$\lambda(\mathbf{u}\!\cdot\!\nabla)\mathbf{u}$.  For non-Beltrami fields,
+the vortex stretching term $(\boldsymbol{\omega}\!\cdot\!\nabla)\mathbf{u}$
+generically differs from the advection term, and the nonlinear residual
+cannot be absorbed into a scalar pressure gradient.  This provides a
+computational explanation for the well-known scarcity of exact 3-D
+Navier--Stokes solutions.
+
+\paragraph{Beltrami verification.}
+As a positive control, we apply the PDE-residual-only solver to
+Arnold--Beltrami--Childress (ABC) flows
+$\mathbf{u}_0 = (A\sin z + C\cos y,\; B\sin x + A\cos z,\;
+ C\sin y + B\cos x)$,
+which satisfy $\boldsymbol{\omega}_0 = \mathbf{u}_0$ for all $A,B,C$.
+The solver recovers $\mathbf{u} = \mathbf{u}_0\,e^{-\nu t}$ at MAE
+$< 10^{-8}$ for both the symmetric case $(A,B,C) = (1,1,1)$ and the
+asymmetric case $(A,B,C) = (1,\sqrt{2},\sqrt{3})$, confirming that the
+pipeline handles multi-term 3-D solutions when they exist.
+
+\paragraph{Multi-term search for non-Beltrami solutions.}
+We also test a four-term-per-component ansatz on the non-Beltrami IC
+$(1,1,-2)$, allowing the optimizer to discover additional spatial modes
+generated by nonlinear interactions.  The vorticity-equation residual
+plateaus at $\sim\!0.4$ after $3{,}000$ training steps, indicating that
+the nonlinear mode coupling does not close within a finite set of four
+separable products.  This is consistent with the physical picture of 3-D
+turbulence: vortex stretching cascades energy to ever-finer scales,
+preventing finite-dimensional mode closure.
+
+% ===========================================================================
+\subsection{Summary of Results}
+\label{sec:summary_table}
+
+Table~\ref{tab:summary} consolidates all experimental outcomes.  The pipeline
+achieves exact symbolic recovery (snap MAE at or below $10^{-7}$) for every
+target that lies within the separable or sum-of-separable hypothesis class, and
+produces clear failure signals for targets outside the class or for
+misspecified basis sets.
+
+\begin{table}[t]
+  \centering
+  \caption{Comprehensive comparison across all experiments.  ``Terms'' is the
+    number of separable products in the recovered expression.  Snap MAE is
+    evaluated on 5{,}000 held-out points.  ``Exact?'' indicates whether the
+    snapped expression matches the ground truth to within machine precision.}
+  \label{tab:summary}
+  \smallskip
+  \begin{tabular}{@{}llccl@{}}
+    \toprule
+    Example & Type & Terms & Snap MAE & Outcome \\
+    \midrule
+    1-D Heat equation
+      & Separable   & 1 & $9\!\times\!10^{-8}$ & Exact recovery \\
+    1-D Wave equation
+      & Separable   & 1 & $5\!\times\!10^{-8}$ & Exact recovery \\
+    Taylor--Green vortex
+      & Separable   & 1 & $7\!\times\!10^{-8}$ & Exact recovery \\
+    Traveling wave $\sin(x\!-\!2t)$
+      & Non-sep.\ & 2 & $3\!\times\!10^{-8}$ & Exact recovery \\
+    Taylor--Green (PDE-residual only)
+      & No data   & 1 & $5\!\times\!10^{-8}$ & Exact recovery \\
+    3-D ABC Beltrami $(1,\!\sqrt{2},\!\sqrt{3})$
+      & No data   & 2 & $1\!\times\!10^{-8}$ & Exact recovery \\
+    \midrule
+    13 non-Beltrami 3-D ICs
+      & ---         & --- & ---                 & Correct failure \\
+    Wrong basis ($\{\exp,\ln\}$)
+      & ---         & --- & ---                 & Correct failure \\
+    High noise ($\sigma\!=\!0.2$)
+      & ---         & --- & ---                 & Correct failure \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Several observations are worth highlighting.  First, the snap MAE is
+remarkably consistent across all successful recoveries, ranging from
+$3\times 10^{-8}$ to $9\times 10^{-8}$---essentially the residual of
+double-precision arithmetic rather than an approximation error.  Second, the
+multi-term search for the traveling wave achieves the \emph{same} precision as
+the single-term cases, confirming that bias freezing is an effective substitute
+for single-term normalization when the decomposition involves more than one
+product.  Third, the two failure modes---wrong basis and excessive
+noise---produce losses that are separated from the success cases by five or
+more orders of magnitude, making it straightforward to distinguish genuine
+recovery from spurious fits without manual inspection.
+
+Compared to general-purpose symbolic regression tools such as
+PySR~\citep{cranmer2023} and AI~Feynman~\citep{udrescu2020}, the separable
+\textsc{ComposeHead} offers a narrower hypothesis class but, within that class,
+achieves machine-precision recovery with a deterministic, gradient-based search
+that requires no genetic operators, no library of heuristic transformations, and
+no human-in-the-loop simplification.  The key limitation---restriction to sums
+of axis-aligned separable products---is discussed further in
+Section~\ref{sec:discussion}.

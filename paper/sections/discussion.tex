@@ -19,7 +19,12 @@ ansatz~\eqref{eq:composehead} aligns naturally with the classical method of
 separation of variables, a primary tool for constructing exact PDE solutions for
 over three centuries.  The novelty is not the separable form itself but the
 end-to-end pipeline from data to exact symbolic expressions without requiring
-human insight into the solution structure.
+human insight into the solution structure.  The method also extends to
+non-separable solutions that decompose as finite sums of separable terms.  The
+traveling wave $\sin(x - 2t) = \sin(x)\cos(2t) - \cos(x)\sin(2t)$ was
+recovered exactly via a brute-force two-term pair search, demonstrating that
+the effective hypothesis class is strictly larger than the set of single
+separable products.
 
 \paragraph{What the method cannot do.}
 The \textsc{ComposeHead} does not prove existence or regularity of solutions in
@@ -92,6 +97,19 @@ determines \emph{which} functions to include; normalization determines
 \emph{how} to make optimization over those functions yield exact symbolic
 output.
 
+EML universality motivated the architectural choices that created the
+conditions under which normalization and snapping could succeed.  The
+conceptual chain---universality $\to$ verified primitives $\to$ compositional
+head $\to$ structured parameters $\to$ normalization $\to$ exact
+recovery---starts with EML\@.  However, the normalization pipeline itself
+exploits properties of $\exp$, $\sin$, and $\cos$ that are independent of
+the EML implementation, and the numerical results would be identical if the
+primitives were implemented via PyTorch intrinsics rather than EML
+compositions.  EML universality motivates the framework and guarantees
+completeness of the primitive basis, but the practical
+contributions---normalization and search strategy---are independent of the EML
+implementation and would apply equally to any library of elementary functions.
+
 \paragraph{Comparison to symbolic regression.}
 PySR~\cite{cranmer2023} and AI~Feynman~\cite{udrescu2020} search over arbitrary
 expression trees and are strictly more general: they can discover algebraic
@@ -154,6 +172,13 @@ of combinatorial complexity.
 An adaptive approach that begins with a small library and introduces additional
 primitives based on residual analysis could reduce the combinatorial burden when
 the relevant function class is unknown a priori.
+
+\paragraph{Multi-term scaling.}
+The brute-force pair search scales as $|\mathcal{F}|^{2K}$ for two-term sums,
+which is tractable for small $K$ and $|\mathcal{F}|$ but becomes prohibitive
+for higher-order decompositions.  Principled strategies for multi-term
+discovery---greedy sequential fitting with gauge-aware normalization, or
+structured sparsity over a large two-term dictionary---remain open problems.
 
 \paragraph{Scaling to higher-dimensional PDEs.}
 PDEs in kinetic theory, finance, and quantum mechanics may involve five or more

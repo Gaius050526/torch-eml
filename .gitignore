@@ -6,3 +6,10 @@ build/
 .pytest_cache/
 *.egg
 docs/superpowers/
+
+# LaTeX build artifacts
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out

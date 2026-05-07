@@ -140,12 +140,18 @@ The principal contributions of this work are as follows.
     establishing a principled (rather than ad hoc) justification for the
     primitive library and ensuring differentiation closure of the function class.
 
-  \item \textbf{Exact recovery of the Taylor--Green vortex.}  We demonstrate
-    the full pipeline on the two-dimensional incompressible Navier--Stokes
-    equations, recovering the velocity field
-    $u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
-    with pointwise error below $10^{-6}$, confirming that the discovered
-    symbolic expression is an exact solution of the governing equations.
+  \item \textbf{Exact recovery across PDE classes.}  We demonstrate the
+    pipeline on four PDE benchmarks---1-D heat, 1-D wave, the non-separable
+    traveling wave $\sin(x-2t)$, and the 2-D incompressible Navier--Stokes
+    equations---recovering every target at machine precision (MAE ${<}\,10^{-7}$).
+
+  \item \textbf{PDE-residual-only symbolic discovery.}  We show that the
+    pipeline can discover exact analytical solutions from the governing
+    equations and initial conditions alone, with no solution data whatsoever.
+    Applied to the 2-D Navier--Stokes equations, it recovers the Taylor--Green
+    vortex $u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
+    at MAE $5\times 10^{-8}$---functioning as a symbolic PINN whose output is
+    a verifiable closed-form expression rather than an opaque weight matrix.
 \end{itemize}
 
 \noindent The remainder of the paper is organized as follows.

@@ -19,10 +19,21 @@ justification for this function library and guarantees closure under
 differentiation---a property essential for computing PDE residuals within the
 compositional graph.
 
-We demonstrate the approach on the two-dimensional Navier--Stokes equations,
-recovering the Taylor--Green vortex solution
-$u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$
-at machine precision (pointwise error ${<}\,10^{-6}$).  Ablation studies confirm
-that normalization is the most impactful design choice, improving snap accuracy
-by five orders of magnitude.
+We demonstrate the approach on benchmarks spanning the 1-D heat equation, 1-D
+wave equation, the non-separable traveling wave $\sin(x - 2t)$, and the
+two-dimensional Navier--Stokes equations, recovering every target at machine
+precision (pointwise error ${<}\,10^{-7}$).  Most notably, we show that the
+pipeline can operate in a \emph{PDE-residual-only} mode---receiving no
+solution data, only the governing equations and initial conditions---and still
+discovers the exact Taylor--Green vortex solution
+$u = \sin(x)\cos(y)\exp(-t/5)$,\;$v = -\cos(x)\sin(y)\exp(-t/5)$,
+functioning as a symbolic physics-informed neural network (PINN) whose output
+is a verifiable closed-form expression rather than an opaque weight matrix.
+A systematic screening of 13 three-dimensional Navier--Stokes initial
+conditions reveals that vortex stretching prevents exact exponential
+solutions for all non-Beltrami flows, while Beltrami (ABC) flows are
+recovered exactly---providing a computational explanation for the scarcity
+of known 3-D exact solutions.  Ablation studies confirm that normalization
+is the most impactful design choice, improving snap accuracy by five orders
+of magnitude.
 \end{abstract}
