@@ -198,37 +198,28 @@ the subsequent snapping step compares like with like.
 
 We identify five properties of the proposed approach that collectively
 explain its effectiveness on the class of problems we consider.
+The first two---normalization and single-term search---are the core
+technical contributions; the remaining three provide enabling context.
 
-\paragraph{Separable ansatz matches target structure.}
-The solutions to the PDEs we target---heat equation, wave equation,
-Navier--Stokes in the Taylor--Green regime---are products of univariate functions
-of the spatial and temporal coordinates.  The SeparableTerm directly
-encodes this product-of-univariates structure, so that a correct solution
-lies at a point in parameter space rather than in a complex submanifold
-of a higher-dimensional space.
-
-\paragraph{Reduced search space.}
-Classical symbolic regression methods such as genetic programming~\citep{cranmer2023}
-search over arbitrary expression trees, yielding a combinatorially large
-search space.  Our approach instead enumerates function assignments to input
-dimensions, producing $|\mathcal{F}|^K$ candidates---polynomial in
-$|\mathcal{F}|$ for fixed $K$, and polynomial in $K$ for fixed $|\mathcal{F}|$.
-For the problems considered here, $|\mathcal{F}| \leq 7$ and $K \leq 3$,
-so exhaustive enumeration is tractable.
-
-\paragraph{Normalization resolves gauge freedom.}
+\paragraph{Normalization resolves gauge freedom (key contribution).}
 The parameterization $c \cdot g(ax + b)$ introduces redundancies.
 For $g = \exp$, the identity $c \cdot \exp(ax + b) = (c\,e^{b}) \cdot \exp(ax)$
-means that $c$ and $b$ are not independently identifiable.
+means that $c$ and $b$ are not independently identifiable: the optimizer
+can distribute scale information between $c$ and $e^{b}$ arbitrarily,
+creating a ridge in the loss landscape along which it may drift.
 For $g = \sin$ or $g = \cos$, the periodicity and parity identities
-create analogous degeneracies.  The normalization step
+create analogous degeneracies---$\sin(x - \pi) = -\sin(x)$ and
+$\sin(x - \pi/2) = -\cos(x)$, so a $\sin$ factor with a phase offset
+of $-\pi/2$ is indistinguishable from a $\cos$ factor with a negated
+coefficient.  The normalization step
 (Algorithm~\ref{alg:discovery}, Step~5) systematically eliminates
 these gauge freedoms, yielding a canonical form in which each parameter
-has a unique interpretation.  This is essential: without normalization,
-a parameter with true value $a = 1$ might be learned as $a = 0.93$
-with compensating $b$ and $c$ values, causing the snapping step to fail.
+has a unique interpretation.  This is the most impactful design choice:
+without normalization, snapping errors are $0.005$--$0.02$; with it,
+errors drop to $7 \times 10^{-8}$---a five-order-of-magnitude improvement
+(Section~\ref{sec:ablation}).
 
-\paragraph{Single-term search avoids signal splitting.}
+\paragraph{Single-term search avoids signal splitting (key contribution).}
 When a multi-term model is trained end-to-end, the optimizer may distribute
 the target signal across many terms, each capturing a small fraction
 of the variance.  The resulting coefficient magnitudes are small and
@@ -240,13 +231,36 @@ near-zero loss; incorrect candidates plateau at high loss.
 This binary signal---correct versus incorrect---is far easier to threshold
 than the continuous coefficient magnitudes in a multi-term model.
 
+\paragraph{Separable ansatz matches target structure.}
+The solutions to the PDEs we target---heat equation, wave equation,
+Navier--Stokes in the Taylor--Green regime---are products of univariate functions
+of the spatial and temporal coordinates.  The SeparableTerm directly
+encodes this product-of-univariates structure, so that a correct solution
+lies at a point in parameter space rather than in a complex submanifold
+of a higher-dimensional space.
+
+\paragraph{EML provides a principled basis.}
+The choice of primitive library $\mathcal{F} = \{\sin, \cos, \exp, \ln,
+\mathrm{id}, \mathrm{sq}, \mathrm{inv}\}$ is not \emph{ad hoc}.
+Every element of $\mathcal{F}$ admits a verified construction from the
+universal EML function $\mathrm{eml}(x, y) = e^{x} - \ln y$
+(Section~\ref{sec:primitives}).  The universality theorem
+of~\cite{odrzywołek2026} guarantees that this basis can, in principle,
+generate any computable function through further composition.
+More practically, the EML function class is closed under partial
+differentiation (Appendix~\ref{appendix:algebraic-proofs}), which ensures
+that PDE residual computations---requiring $\partial_{t} u$, $\partial_{x} u$,
+$\partial_{xx} u$, etc.---remain within the same function class.
+This closure property is what enables physics-informed training through
+the compositional graph.
+
 \paragraph{Gradient-based optimization.}
-Unlike genetic programming approaches, every operation in our pipeline
-is differentiable.  Each EML primitive---$\exp$ via $\mathrm{eml}(x, 1)$,
-$\sin$ and $\cos$ via the imaginary and real parts of
-$\mathrm{eml}(ix, 1) = e^{ix}$---supports standard backpropagation.
-This allows us to leverage mature gradient-based optimizers (Adam) with
-well-understood convergence properties, rather than relying on stochastic
-search heuristics.  The per-candidate optimization problem is low-dimensional
-($2K + 1$ parameters), smooth, and---for the correct function assignment---typically
-convex in the neighborhood of the true solution.
+Every operation in our pipeline is differentiable.  Each EML
+primitive---$\exp$ via $\mathrm{eml}(x, 1)$, $\sin$ and $\cos$ via the
+imaginary and real parts of $\mathrm{eml}(ix, 1) = e^{ix}$---supports
+standard backpropagation.  This allows us to leverage mature gradient-based
+optimizers (Adam) with well-understood convergence properties, rather
+than relying on stochastic search heuristics.  The per-candidate
+optimization problem is low-dimensional ($2K + 1$ parameters), smooth,
+and---for the correct function assignment---typically convex in the
+neighborhood of the true solution.

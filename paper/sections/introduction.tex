@@ -38,35 +38,53 @@ $\sin(x)\cos(y)\exp(-\nu t)$---and the combinatorial explosion of
 multi-variable compositions quickly overwhelms generic symbolic regression
 engines.
 
-\paragraph{The EML function as a universal basis.}
-Odrzywo{\l}ek~\cite{odrzywołek2026} recently proved that the two-argument function
-\begin{equation}
-  \label{eq:eml}
-  \mathrm{eml}(x,y) \;=\; e^{x} - \ln y
-\end{equation}
-is \emph{universal}: every computable function can be represented as a finite
-composition of $\mathrm{eml}$ with itself.  This result is striking because it
-reduces the space of all computable functions to a single primitive operation,
-in contrast to the multi-operation libraries assumed by conventional symbolic
-regression.  In principle, one could search over EML expression trees to
-discover any target function.  In practice, however, the raw EML representation
-is unwieldy.  Multiplication alone---$x \cdot y$---requires a reverse-Polish
-representation of length~41 when expanded purely in terms of $\mathrm{eml}$.
-Directly optimizing over such trees is computationally intractable for
-expressions of the complexity encountered in PDE solutions.
+\paragraph{Elementary functions as a principled basis.}
+A natural question arises: which set of primitive functions should a symbolic
+search use?  An ad hoc selection risks omitting functions needed for a given
+solution class.  The recent universality result of
+Odrzywo{\l}ek~\cite{odrzywołek2026} provides a principled answer.
+Odrzywo{\l}ek proved that the two-argument function
+$\mathrm{eml}(x,y) = e^{x} - \ln y$ is \emph{universal}: every computable
+function can be represented as a finite composition of $\mathrm{eml}$ with
+itself.  Although the raw EML representation is unwieldy---multiplication alone
+requires a reverse-Polish representation of length~41---the result has a
+practically important corollary: the elementary functions $\{\sin, \cos, \exp,
+\ln\}$ can each be constructed from EML compositions via algebraic identities.
+This establishes the set $\{\sin, \cos, \exp, \ln\}$ not as an arbitrary
+library but as a \emph{verified basis} derived from a universal primitive.
+Moreover, this function class is closed under partial differentiation, a
+property that is essential when the loss function involves PDE residuals
+computed via automatic differentiation.
 
-\paragraph{Our approach: verified primitives and compositional search.}
-The key observation underlying our method is that one need not optimize at the
-level of raw EML trees.  Instead, we first derive \emph{verified constructions}
-of the standard elementary functions---$\exp$, $\ln$, $\sin$, $\cos$---from
-the base EML operation using algebraic identities.  Each construction is
-validated symbolically so that it reproduces the target function exactly.
-These verified primitives then serve as differentiable building blocks in a
-higher-level architecture we call the \textsc{ComposeHead}.
+\paragraph{Our approach: normalization-driven symbolic recovery.}
+The central challenge in recovering exact symbolic expressions from
+gradient-trained models is not the choice of architecture but rather the
+\emph{extraction} of clean symbolic forms from continuously parameterized
+representations.  Elementary functions exhibit gauge freedoms that confound
+naive coefficient readout: a trained model may represent $\cos(x)$ as
+$\sin(x + \pi/2)$, absorb constant factors into exponential biases, or split a
+single physical term across multiple basis functions with nearly cancelling
+coefficients.  We address these difficulties with two key ideas.
 
-The \textsc{ComposeHead} represents candidate solutions as trainable linear
-combinations of \emph{separable terms}, where each term is a product of
-axis-aligned primitive applications:
+First, we introduce a \emph{normalization pipeline} that resolves the gauge
+freedom inherent in parameterized elementary functions.  The pipeline absorbs
+exponential biases into linear coefficients, canonicalizes trigonometric phases
+by exploiting the identities $\sin(x + \pi/2) = \cos(x)$ and
+$\cos(x + \pi) = -\cos(x)$, and rounds the resulting coefficients to nearby
+rational or otherwise recognizable values.  This normalization step is the
+primary enabler of exact symbolic recovery, improving coefficient accuracy by
+approximately five orders of magnitude relative to direct readout of trained
+parameters.
+
+Second, we adopt a \emph{single-term search strategy} in which the model is
+trained with $K=1$ active term at a time, avoiding the signal-splitting
+pathology in which a multi-term ansatz distributes a single physical mode across
+several basis functions with partially cancelling coefficients.  Multi-term
+solutions are assembled by sequential residual fitting.
+
+These ideas are realized in a differentiable architecture we call the
+\textsc{ComposeHead}, which represents candidate solutions as trainable linear
+combinations of \emph{separable terms}:
 \begin{equation}
   \label{eq:composehead-intro}
   \hat{u}(\mathbf{x}) \;=\; \sum_{k=1}^{K} c_k \prod_{d=1}^{D}
@@ -74,53 +92,53 @@ axis-aligned primitive applications:
 \end{equation}
 with each factor $f_{k,d}$ drawn from the primitive library
 $\{\sin,\cos,\exp,\ln,\mathrm{id}\}$ and each $\alpha_{k,d}$, $\beta_{k,d}$,
-$c_k$ a trainable scalar coefficient.  This separable structure directly
-mirrors the form of most known analytical PDE solutions, in which each spatial
-or temporal variable appears inside its own elementary function.  The
-optimization problem thus reduces from ``find 60 arbitrary neural-network
-weights'' to ``identify which functions compose, with what coefficients.''
-
-\paragraph{From learned parameters to exact symbolic expressions.}
-After training, the learned coefficients are real-valued and carry the
-accumulated artifacts of gradient-based optimization---arbitrary phase offsets in
-trigonometric terms, exponential biases absorbed into multiplicative constants,
-and small numerical residuals.  We introduce a \emph{normalization and snapping}
-pipeline that (i)~absorbs exponential biases into the linear coefficients~$c_k$,
-(ii)~canonicalizes trigonometric phases by exploiting the identities
-$\sin(x + \pi/2) = \cos(x)$ and $\cos(x + \pi) = -\cos(x)$, and
-(iii)~rounds the resulting coefficients to nearby rational or otherwise
-recognizable values.  The output is a clean symbolic expression that can be
-verified independently against the governing PDE.
+$c_k$ a trainable scalar coefficient.  The separable product structure mirrors
+the classical method of separation of variables, which has been a cornerstone of
+analytical PDE theory for three centuries.  By restricting the hypothesis class
+to this well-understood form, the optimization problem reduces from learning
+arbitrary neural-network weights to identifying which elementary functions
+compose along each coordinate axis and with what coefficients.
 
 \paragraph{Scope and limitations.}
-We emphasize that the method proposed here is best understood as
-\emph{symbolic regression specialized to PDE solutions}, not as a general PDE
-solver.  The separable ansatz in Equation~\eqref{eq:composehead-intro} is expressive
-for the broad class of problems whose analytical solutions factor across
-coordinate dimensions, but it does not address existence, uniqueness, or
-regularity questions, nor does it replace mesh-based solvers for problems
-lacking closed-form solutions.  Our claims are accordingly conservative: we
-demonstrate that, when an analytical solution exists and has separable structure,
-the method can recover it exactly from PDE-residual supervision alone.
+The method proposed here is best understood as \emph{symbolic regression
+specialized to separable PDE solutions}.  The ansatz in
+Equation~\eqref{eq:composehead-intro} is expressive for the broad class of
+problems whose analytical solutions factor across coordinate dimensions---a
+class that includes many canonical problems in mathematical physics---but it
+does not address existence, uniqueness, or regularity questions, nor does it
+replace mesh-based solvers for problems lacking closed-form solutions.  Problems
+whose solutions are inherently non-separable (e.g., those requiring similarity
+variables or integral representations) fall outside the current scope.  Our
+claims are accordingly conservative: we demonstrate that, when an analytical
+solution exists and has separable structure, the method can recover it exactly
+from PDE-residual supervision alone.
 
 \paragraph{Contributions.}
 The principal contributions of this work are as follows.
 \begin{itemize}
-  \item \textbf{Verified EML primitive constructions.}  We provide
-    differentiable, algebraically verified implementations of $\exp$, $\ln$,
-    $\sin$, and $\cos$ built entirely from compositions of the EML function,
-    establishing a concrete link between the universality theorem
-    of~\cite{odrzywołek2026} and practical symbolic computation.
-
-  \item \textbf{ComposeHead architecture.}  We introduce a neural architecture
-    whose hypothesis class is the set of linear combinations of separable
-    products of axis-aligned elementary functions, enabling gradient-based
-    search over symbolic PDE solution candidates.
-
-  \item \textbf{Normalization and snapping pipeline.}  We describe a
-    post-training procedure that absorbs phase offsets and exponential biases
-    into canonical form, then snaps coefficients to exact values, converting
+  \item \textbf{Normalization and snapping pipeline.}  We introduce a
+    post-training procedure that resolves the gauge freedom in parameterized
+    elementary functions---absorbing exponential biases, canonicalizing
+    trigonometric phases, and snapping coefficients to exact values---converting
     a continuously parameterized model into a closed-form symbolic expression.
+    This pipeline yields approximately five orders of magnitude improvement in
+    coefficient accuracy relative to direct parameter readout.
+
+  \item \textbf{Single-term search strategy.}  We show that training with one
+    active term at a time, followed by sequential residual fitting, avoids the
+    signal-splitting pathology that arises in multi-term optimization and is
+    essential for reliable symbolic extraction.
+
+  \item \textbf{ComposeHead architecture with separable ansatz.}  We introduce a
+    differentiable architecture whose hypothesis class is the set of linear
+    combinations of separable products of axis-aligned elementary functions,
+    enabling gradient-based search over symbolic PDE solution candidates.
+
+  \item \textbf{EML-grounded primitive basis.}  We provide differentiable,
+    algebraically verified implementations of $\exp$, $\ln$, $\sin$, and $\cos$
+    built from compositions of the EML function of~\cite{odrzywołek2026},
+    establishing a principled (rather than ad hoc) justification for the
+    primitive library and ensuring differentiation closure of the function class.
 
   \item \textbf{Exact recovery of the Taylor--Green vortex.}  We demonstrate
     the full pipeline on the two-dimensional incompressible Navier--Stokes
