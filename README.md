@@ -177,6 +177,7 @@ See [`examples/`](examples/) for complete runnable scripts:
 4. **Auto Search** — Auto-tune depth, prune, fine-tune, snap, and visualize
 5. **Physics Rediscovery** — Recover Kepler's law, inverse square law, and kinetic energy from noisy data
 6. **MLP vs EML** — Same accuracy, but only EML gives you the equation
+7. **Navier-Stokes** — Physics-informed EML: discover closed-form PDE solutions
 
 ## How It Works
 
