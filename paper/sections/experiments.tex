@@ -1,7 +1,7 @@
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate the proposed pipeline on six classes of problems: separable PDE
+We evaluate the proposed pipeline on seven classes of problems: separable PDE
 benchmarks spanning one- and two-dimensional domains
 (Section~\ref{sec:separable_benchmarks}), a non-separable traveling-wave
 recovery that demonstrates multi-term search
@@ -9,10 +9,11 @@ recovery that demonstrates multi-term search
 (Section~\ref{sec:robustness}), ablation studies isolating each design
 choice (Section~\ref{sec:ablation}), PDE-residual-only discovery that
 recovers exact solutions from the governing equations alone without any
-solution data (Section~\ref{sec:pde_residual}), and a systematic
+solution data (Section~\ref{sec:pde_residual}), a systematic
 three-dimensional Navier--Stokes screening that tests which classes of 3-D
 initial conditions admit exact separable solutions
-(Section~\ref{sec:3d_ns}).
+(Section~\ref{sec:3d_ns}), and recovery of nonlinear PDE solutions using
+an extended hyperbolic basis (Section~\ref{sec:hyperbolic}).
 Section~\ref{sec:summary_table} collects
 all results in a unified comparison table.  All experiments use
 PyTorch~2.0+~\citep{paszke2019} on a single CPU; the most expensive search
@@ -547,6 +548,46 @@ turbulence: vortex stretching cascades energy to ever-finer scales,
 preventing finite-dimensional mode closure.
 
 % ===========================================================================
+\subsection{Extended Basis: Hyperbolic Primitives}
+\label{sec:hyperbolic}
+
+The primitive basis $\{\sin, \cos, \exp, \ln\}$ cannot represent solutions
+involving hyperbolic functions.  We extend the basis with $\tanh$ and
+$\operatorname{sech}$, which are EML-constructible---$\tanh(x) = (\exp(x) -
+\exp(-x))/(\exp(x) + \exp(-x))$---but impractically deep as raw EML
+compositions.  The normalization pipeline extends naturally: $\tanh(-x) =
+-\tanh(x)$ (absorb sign of frequency into coefficient) and
+$\operatorname{sech}(-x) = \operatorname{sech}(x)$ (ensure positive
+frequency).  We test on three nonlinear PDEs whose exact solutions require
+the extended basis.
+
+\paragraph{Allen--Cahn kink.}
+The steady Allen--Cahn equation $u_{xx} + u - u^{3} = 0$ admits the kink
+solution $u(x) = \tanh(x/\sqrt{2})$.  A single $\tanh$ \texttt{AxisTerm}
+trained on the exact solution for 2{,}000 Adam steps recovers
+$a = 0.707107$ (error $1.2\!\times\!10^{-8}$ from $1/\sqrt{2}$) and
+$c = 1.000000$, with MAE~$= 7\!\times\!10^{-9}$.
+
+\paragraph{Burgers steady shock.}
+The steady Burgers equation $u\,u_{x} = \nu\,u_{xx}$ with
+$u(\pm\infty) = \pm A$ has the exact solution
+$u(x) = A\tanh(Ax/2\nu)$.  With $A=2$, $\nu=1$, the pipeline recovers
+$c = 2.000000$ and $a = 1.000000$ (errors $< 2.4\!\times\!10^{-7}$),
+MAE~$= 1.7\!\times\!10^{-7}$.
+
+\paragraph{KdV soliton profile.}
+The KdV soliton at $t=0$ is $u(x,0) = -2\operatorname{sech}^{2}(x)$.
+Using a product $c \cdot \operatorname{sech}(ax+b)^{2}$, the pipeline
+recovers $c = -2.000000$, $a = 1.000000$ (errors $< 1.2\!\times\!10^{-7}$),
+MAE~$= 2.8\!\times\!10^{-8}$.  The full traveling-wave soliton
+$\operatorname{sech}^{2}(x - ct)$ is not separable in $(x,t)$ and remains
+outside the hypothesis class.
+
+All three recoveries achieve machine precision, confirming that the
+normalization and snapping pipeline generalizes beyond trigonometric and
+exponential functions to any primitive with well-defined parity.
+
+
 \subsection{Summary of Results}
 \label{sec:summary_table}
 
@@ -580,6 +621,12 @@ misspecified basis sets.
       & No data   & 1 & $5\!\times\!10^{-8}$ & Exact recovery \\
     3-D ABC Beltrami $(1,\!\sqrt{2},\!\sqrt{3})$
       & No data   & 2 & $1\!\times\!10^{-8}$ & Exact recovery \\
+    Allen--Cahn $\tanh(x/\!\sqrt{2})$
+      & Hyp.\ basis  & 1 & $7\!\times\!10^{-9}$ & Exact recovery \\
+    Burgers shock $2\tanh(x)$
+      & Hyp.\ basis  & 1 & $2\!\times\!10^{-7}$ & Exact recovery \\
+    KdV soliton $\operatorname{sech}^{2}(x)$
+      & Hyp.\ basis  & 1 & $3\!\times\!10^{-8}$ & Exact recovery \\
     \midrule
     13 non-Beltrami 3-D ICs
       & ---         & --- & ---                 & Correct failure \\

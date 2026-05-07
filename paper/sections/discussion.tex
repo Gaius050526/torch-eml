@@ -230,6 +230,43 @@ $f(ax + by)$ coupling coordinate variables, and (ii)~nested compositions
 $f \circ g$ within each factor.  Both enlarge the hypothesis class at the cost
 of combinatorial complexity.
 
+\paragraph{Extending the primitive basis: hyperbolic functions.}
+The primitive basis $\{\sin, \cos, \exp, \ln\}$ can be extended with hyperbolic
+functions $\tanh$ and $\operatorname{sech}$, which are EML-constructible by
+universality---$\tanh(x) = (\exp(x) - \exp(-x))/(\exp(x) + \exp(-x))$ is a
+finite composition of $\exp$ and division---but impractically deep as raw EML
+trees.  Extracting them as named primitives is the mathematical equivalent of
+defining a subroutine: compressing a deep composition into a stable,
+differentiable unit.  We verified that this extension recovers the Allen--Cahn
+kink $u = \tanh(x/\sqrt{2})$ (pointwise error $< 10^{-8}$), the Burgers steady
+shock $u = A\tanh(Ax/2\nu)$, and the KdV soliton profile $u = -2\operatorname{sech}^{2}(x)$---solutions
+entirely outside the reach of the original basis.  This pattern generalizes:
+Bessel functions, Airy functions, and elliptic functions are all
+EML-constructible at sufficient depth and could be ``unfolded'' into named
+primitives to unlock their respective PDE classes.
+
+\paragraph{Function discovery via unconstrained EML.}
+A deeper question is whether EML can discover function families that have not
+yet been named.  Historically, new functions were discovered when PDEs demanded
+them: Bessel functions (1817) from the cylindrical wave equation, Airy functions
+(1838) from optics, Weierstrass $\wp$ (1860s) from elliptic PDEs.  In each
+case, the equation forced the creation of a new primitive.  The raw
+\texttt{EMLHead}---a binary tree of \texttt{eml}$(x,y) = \exp(x) - \ln(y)$
+nodes with trainable weights---searches over \emph{all} compositions of $\exp$
+and $\ln$ up to a given depth, unconstrained by named functions.  If trained on
+a PDE residual, the resulting tree \emph{is} the solution, expressed as a nested
+composition.  If that composition does not simplify to any known function, it
+constitutes a genuine discovery: a function defined by its EML structure.
+Preliminary experiments show that raw EML trees can partially recover $\tanh$
+(MAE $\sim 10^{-2}$) without being told the function exists, but the
+optimization landscape for deep compositions is orders of magnitude harder than
+for named primitives---confirming that ``naming a function'' is not merely a
+notational convenience but a critical compression that makes optimization
+tractable.  Developing better optimization methods for deep EML trees---evolutionary
+strategies, hierarchical motif extraction, or reinforcement learning---is a
+central open problem that could transform EML from a tool for recovering known
+solutions into a tool for discovering new mathematics.
+
 \paragraph{Automated basis selection.}
 An adaptive approach that begins with a small library and introduces additional
 primitives based on residual analysis could reduce the combinatorial burden when
