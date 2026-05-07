@@ -257,15 +257,40 @@ and $\ln$ up to a given depth, unconstrained by named functions.  If trained on
 a PDE residual, the resulting tree \emph{is} the solution, expressed as a nested
 composition.  If that composition does not simplify to any known function, it
 constitutes a genuine discovery: a function defined by its EML structure.
-Preliminary experiments show that raw EML trees can partially recover $\tanh$
-(MAE $\sim 10^{-2}$) without being told the function exists, but the
-optimization landscape for deep compositions is orders of magnitude harder than
-for named primitives---confirming that ``naming a function'' is not merely a
-notational convenience but a critical compression that makes optimization
-tractable.  Developing better optimization methods for deep EML trees---evolutionary
-strategies, hierarchical motif extraction, or reinforcement learning---is a
-central open problem that could transform EML from a tool for recovering known
-solutions into a tool for discovering new mathematics.
+Preliminary experiments demonstrate feasibility at multiple levels.  First,
+population-based optimization with evolutionary selection recovers $\tanh$ from
+raw EML at MAE~$\sim 3\!\times\!10^{-4}$ (correlation $r = 1.0000$) and
+even approximates non-elementary functions: $\operatorname{erf}(x)$---defined
+by an integral with no finite exp/ln representation---is recovered at
+MAE~$\sim 1.6\!\times\!10^{-4}$.  Second, PDE-residual-only training
+discovers $\tanh(x/\sqrt{2})$ from the Allen--Cahn equation without
+knowing $\tanh$ exists (MAE~$\sim 1.9\!\times\!10^{-3}$).  Third, targeting
+ODEs with \emph{no known closed-form solution}---the Blasius boundary-layer
+equation $f''' + ff'' = 0$ (unsolved symbolically since 1908) and the
+Lane--Emden $n\!=\!3$ polytrope $y'' + (2/x)y' + y^{3} = 0$---yields EML
+trees that reproduce the numerical solutions at MAE~$\sim 10^{-3}$ and
+$7\!\times\!10^{-4}$ respectively.  These trees are, in a precise sense,
+the first symbolic representations of these functions: finite compositions of
+$\exp(w \cdot x + b) - \ln|w \cdot y + b|$ that encode functions which have
+resisted closed-form expression for over a century.
+
+Cross-tree motif analysis reveals that the Blasius and Lane--Emden EML trees
+share internal sub-compositions: both independently construct
+$\ln(1 + \exp(x))$ (the softplus function) as a recurring building block,
+with cross-tree correlation $r > 0.999$.  This suggests that EML trees
+converge on common structural motifs even when fitting unrelated functions,
+and that these motifs may represent a natural ``vocabulary'' of EML
+sub-expressions.  However, the optimization landscape for deep compositions
+remains orders of magnitude harder than for named primitives: deeper trees
+(depth 5--6) with 188--380 parameters consistently underperform shallower
+trees (depth 4, 92 parameters) when optimization budgets are fixed.
+This confirms that naming a function is not merely a notational convenience
+but a critical compression that makes optimization tractable.  Developing
+better optimization methods for deep EML trees---CMA-ES with larger
+populations, hierarchical motif extraction with progressive freezing, or
+reinforcement-learning-guided tree construction---is a central open problem
+that could transform EML from a tool for recovering known solutions into
+a tool for discovering new mathematics.
 
 \paragraph{Automated basis selection.}
 An adaptive approach that begins with a small library and introduces additional
