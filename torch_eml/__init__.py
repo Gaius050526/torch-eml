@@ -9,6 +9,10 @@ from torch_eml.symbolic import SymbolicExpression, to_symbolic, snap
 from torch_eml.pruning import prune, PruneReport
 from torch_eml.auto import auto_depth, search, SearchResult
 from torch_eml.viz import tree_to_html, save_html
+from torch_eml.primitives import (
+    EMLExp, EMLLn, EMLSin, EMLCos, EMLPi,
+    PRIMITIVES, verify_constructions,
+)
 
 __all__ = [
     "EMLNode",
@@ -24,4 +28,11 @@ __all__ = [
     "SearchResult",
     "tree_to_html",
     "save_html",
+    "EMLExp",
+    "EMLLn",
+    "EMLSin",
+    "EMLCos",
+    "EMLPi",
+    "PRIMITIVES",
+    "verify_constructions",
 ]

@@ -198,7 +198,7 @@ The equation is not an approximation — it's a closed-form expression you can p
 @article{odrzywolel2026,
   title={All elementary functions from a single binary operator},
   author={Odrzywo{\l}ek, Andrzej},
-  journal={arXiv preprint arXiv:2503.20022},
+  journal={arXiv preprint arXiv:2603.21852},
   year={2026}
 }
 

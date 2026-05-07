@@ -1,14 +1,9 @@
 """Physics-Informed EML: Discover closed-form solutions to Navier-Stokes.
 
-Instead of fitting data, we train EML trees to satisfy the Navier-Stokes
-equations directly. The loss is the PDE residual — if it hits zero, the
-symbolic expression IS a solution.
-
-We validate on known exact solutions, then push further.
-
-Incompressible Navier-Stokes:
-    du/dt + (u . nabla)u = -nabla(p)/rho + nu * laplacian(u)
-    div(u) = 0
+Uses curriculum learning:
+  Phase 1: Data-driven — learn sin/cos structure from known solution samples
+  Phase 2: Mixed — data loss + gradually increasing PDE residual
+  Phase 3: PDE-dominant — L-BFGS refinement with data as regularizer
 """
 
 import logging
@@ -21,138 +16,104 @@ logging.basicConfig(level=logging.INFO)
 torch.manual_seed(42)
 
 
-def train_pinn(heads, loss_fn, epochs=3000, lr=0.005):
-    """Train one or more EML heads with PDE loss and gradient clipping."""
-    params = []
-    for h in heads if isinstance(heads, (list, tuple)) else [heads]:
-        params.extend(h.parameters())
-    optimizer = torch.optim.Adam(params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
-
-    for step in range(epochs):
-        loss_dict = loss_fn(step)
-        total = sum(loss_dict.values())
-
-        optimizer.zero_grad()
-        total.backward()
-        nn.utils.clip_grad_norm_(params, max_norm=1.0)
-        optimizer.step()
-        scheduler.step()
-
-        if (step + 1) % 500 == 0:
-            parts = ", ".join(f"{k}={v.item():.8f}" for k, v in loss_dict.items())
-            print(f"  step {step+1}: {parts}")
-
-
 # ============================================================
-# 1. COUETTE FLOW
-#    Two parallel plates, top moving at velocity U.
-#    Known solution: u(y) = U * y/H (linear profile)
-#    Steady 1D: d²u/dy² = 0, u(0)=0, u(H)=U
+# 1. COUETTE FLOW: u(y) = y
 # ============================================================
 print("=" * 60)
-print("1. COUETTE FLOW: u(y) = U * y / H")
-print("   PDE: d²u/dy² = 0,  BC: u(0)=0, u(1)=1")
+print("1. COUETTE FLOW: u(y) = y")
 print("=" * 60)
 
 y_col = torch.linspace(0, 1, 200, requires_grad=True).unsqueeze(1)
 head_c = EMLHead(n_inputs=1, depth=2)
+optimizer = torch.optim.Adam(head_c.parameters(), lr=0.005)
 
-
-def couette_loss(step):
+for step in range(3000):
     u = head_c(y_col)
     du = torch.autograd.grad(u, y_col, torch.ones_like(u), create_graph=True)[0]
     d2u = torch.autograd.grad(du, y_col, torch.ones_like(du), create_graph=True)[0]
-    pde = (d2u ** 2).mean()
-    bc = (head_c(torch.tensor([[0.0]])) ** 2).squeeze() + \
-         ((head_c(torch.tensor([[1.0]])) - 1.0) ** 2).squeeze()
-    return {"pde": pde, "bc": 20.0 * bc}
-
-
-train_pinn(head_c, couette_loss, epochs=3000, lr=0.005)
+    loss = (d2u ** 2).mean() + 20.0 * (
+        head_c(torch.tensor([[0.0]])).squeeze() ** 2 +
+        (head_c(torch.tensor([[1.0]])).squeeze() - 1.0) ** 2
+    )
+    optimizer.zero_grad()
+    loss.backward()
+    nn.utils.clip_grad_norm_(head_c.parameters(), 1.0)
+    optimizer.step()
 
 y_val = torch.linspace(0, 1, 200).unsqueeze(1)
 head_c.prune(threshold=0.1, calibration_data=y_val)
 expr = head_c.snap(tolerance=0.15, validation_data=(y_val, y_val))
-
-print(f"\n  Discovered: u(y) = {expr.string}")
-print(f"  Expected:   u(y) = y")
-
 with torch.no_grad():
     error = (head_c(y_val) - y_val).abs().max().item()
-    print(f"  Max error: {error:.6f}")
-
-save_html(head_c, "couette_tree.html",
-          title="Couette Flow", equation=expr.string)
+print(f"  Discovered: u(y) = {expr.string}")
+print(f"  Max error: {error:.6f}")
 
 
 # ============================================================
-# 2. POISEUILLE FLOW (pressure-driven channel flow)
-#    Known solution: u(y) = G/2 * y * (H - y)
-#    PDE: d²u/dy² = -G, u(0)=0, u(H)=0
+# 2. POISEUILLE FLOW: u(y) = y*(1-y)
 # ============================================================
 print(f"\n{'=' * 60}")
-print("2. POISEUILLE FLOW: u(y) = y * (1 - y)")
-print("   PDE: d²u/dy² = -2,  BC: u(0)=0, u(1)=0")
+print("2. POISEUILLE FLOW: u(y) = y*(1-y)")
 print("=" * 60)
 
-G = 2.0
 y_col2 = torch.linspace(0, 1, 200, requires_grad=True).unsqueeze(1)
 head_p = EMLHead(n_inputs=1, depth=3)
+optimizer = torch.optim.Adam(head_p.parameters(), lr=0.005)
 
-
-def poiseuille_loss(step):
+for step in range(4000):
     u = head_p(y_col2)
     du = torch.autograd.grad(u, y_col2, torch.ones_like(u), create_graph=True)[0]
     d2u = torch.autograd.grad(du, y_col2, torch.ones_like(du), create_graph=True)[0]
-    pde = ((d2u + G) ** 2).mean()
-    bc = (head_p(torch.tensor([[0.0]])) ** 2).squeeze() + \
-         (head_p(torch.tensor([[1.0]])) ** 2).squeeze()
-    return {"pde": pde, "bc": 20.0 * bc}
-
-
-train_pinn(head_p, poiseuille_loss, epochs=4000, lr=0.005)
+    loss = ((d2u + 2.0) ** 2).mean() + 20.0 * (
+        head_p(torch.tensor([[0.0]])).squeeze() ** 2 +
+        head_p(torch.tensor([[1.0]])).squeeze() ** 2
+    )
+    optimizer.zero_grad()
+    loss.backward()
+    nn.utils.clip_grad_norm_(head_p.parameters(), 1.0)
+    optimizer.step()
 
 y_val = torch.linspace(0, 1, 200).unsqueeze(1)
 u_exact = y_val * (1 - y_val)
 head_p.prune(threshold=0.1, calibration_data=y_val)
 expr = head_p.snap(tolerance=0.15, validation_data=(y_val, u_exact))
-
-print(f"\n  Discovered: u(y) = {expr.string}")
-print(f"  Expected:   u(y) = y*(1-y)")
-
 with torch.no_grad():
     error = (head_p(y_val) - u_exact).abs().max().item()
-    print(f"  Max error: {error:.6f}")
-
-save_html(head_p, "poiseuille_tree.html",
-          title="Poiseuille Flow", equation=expr.string)
+print(f"  Discovered: u(y) = {expr.string}")
+print(f"  Max error: {error:.6f}")
 
 
 # ============================================================
-# 3. TAYLOR-GREEN VORTEX (2D, decaying)
-#    u(x,y,t) =  sin(x)*cos(y)*exp(-2νt)
-#    v(x,y,t) = -cos(x)*sin(y)*exp(-2νt)
-#
-#    Known exact solution to 2D incompressible NS.
+# 3. TAYLOR-GREEN VORTEX — CURRICULUM LEARNING
 # ============================================================
 print(f"\n{'=' * 60}")
-print("3. TAYLOR-GREEN VORTEX (2D decaying)")
-print("   u = sin(x)cos(y)exp(-2vt)")
+print("3. TAYLOR-GREEN VORTEX")
 print("=" * 60)
 
 nu = 0.1
+PI2 = 2 * 3.14159265
 
-n_pts = 400
-x_c = (torch.rand(n_pts, 1) * 2 * 3.14159).requires_grad_(True)
-y_c = (torch.rand(n_pts, 1) * 2 * 3.14159).requires_grad_(True)
-t_c = (torch.rand(n_pts, 1) * 1.0).requires_grad_(True)
+head_u = EMLHead(n_inputs=3, depth=4)
+head_v = EMLHead(n_inputs=3, depth=4)
+params = list(head_u.parameters()) + list(head_v.parameters())
 
-head_u = EMLHead(n_inputs=3, depth=3)
-head_v = EMLHead(n_inputs=3, depth=3)
+# Training data from known solution
+n_data = 1000
+x_d = torch.rand(n_data, 1) * PI2
+y_d = torch.rand(n_data, 1) * PI2
+t_d = torch.rand(n_data, 1) * 1.0
+data_in = torch.cat([x_d, y_d, t_d], dim=1)
+u_target = torch.sin(x_d) * torch.cos(y_d) * torch.exp(-2 * nu * t_d)
+v_target = -torch.cos(x_d) * torch.sin(y_d) * torch.exp(-2 * nu * t_d)
+
+# Collocation points for PDE
+x_c = (torch.rand(500, 1) * PI2).requires_grad_(True)
+y_c = (torch.rand(500, 1) * PI2).requires_grad_(True)
+t_c = (torch.rand(500, 1) * 1.0).requires_grad_(True)
 
 
-def taylor_green_loss(step):
+def compute_pde_residual():
+    """Compute NS residual at collocation points."""
     xyt = torch.cat([x_c, y_c, t_c], dim=1)
     u = head_u(xyt)
     v = head_v(xyt)
@@ -169,50 +130,121 @@ def taylor_green_loss(step):
     v_xx = torch.autograd.grad(v_x, x_c, torch.ones_like(v_x), create_graph=True)[0]
     v_yy = torch.autograd.grad(v_y, y_c, torch.ones_like(v_y), create_graph=True)[0]
 
-    # Continuity
     cont = (u_x + v_y) ** 2
-
-    # Momentum (pressure-free form using vorticity approach)
     mom_x = (u_t + u * u_x + v * u_y - nu * (u_xx + u_yy)) ** 2
     mom_y = (v_t + u * v_x + v * v_y - nu * (v_xx + v_yy)) ** 2
-
-    pde = cont.mean() + mom_x.mean() + mom_y.mean()
-
-    # Initial condition
-    n_ic = 200
-    xi = torch.rand(n_ic, 1) * 2 * 3.14159
-    yi = torch.rand(n_ic, 1) * 2 * 3.14159
-    ti = torch.zeros(n_ic, 1)
-    ic_in = torch.cat([xi, yi, ti], dim=1)
-
-    ic = ((head_u(ic_in) - torch.sin(xi) * torch.cos(yi)) ** 2).mean() + \
-         ((head_v(ic_in) + torch.cos(xi) * torch.sin(yi)) ** 2).mean()
-
-    return {"pde": pde, "ic": 10.0 * ic}
+    return cont.mean() + mom_x.mean() + mom_y.mean()
 
 
-train_pinn([head_u, head_v], taylor_green_loss, epochs=5000, lr=0.003)
+# --- Phase 1: Pure data fitting (10k steps) ---
+print("\n  Phase 1: Data-driven (learning sin*cos structure)...")
+optimizer = torch.optim.Adam(params, lr=0.005)
 
-# Extract
+best_data_loss = float("inf")
+for step in range(10000):
+    u_pred = head_u(data_in)
+    v_pred = head_v(data_in)
+    loss = nn.functional.mse_loss(u_pred, u_target) + \
+           nn.functional.mse_loss(v_pred, v_target)
+
+    optimizer.zero_grad()
+    loss.backward()
+    nn.utils.clip_grad_norm_(params, 1.0)
+    optimizer.step()
+
+    if loss.item() < best_data_loss:
+        best_data_loss = loss.item()
+
+    if (step + 1) % 2000 == 0:
+        print(f"    step {step+1}: data_loss={loss.item():.6f}")
+
+print(f"    Best data loss: {best_data_loss:.6f}")
+
+# --- Phase 2: Mixed data + PDE (8k steps, PDE ramps up) ---
+print("\n  Phase 2: Mixed data + PDE (ramping)...")
+optimizer = torch.optim.Adam(params, lr=0.002)
+
+for step in range(8000):
+    pde_weight = min(1.0, step / 3000.0)
+
+    u_pred = head_u(data_in)
+    v_pred = head_v(data_in)
+    data_loss = nn.functional.mse_loss(u_pred, u_target) + \
+                nn.functional.mse_loss(v_pred, v_target)
+
+    pde_loss = compute_pde_residual()
+
+    # Guard against NaN
+    if not torch.isfinite(pde_loss):
+        continue
+
+    loss = data_loss + pde_weight * pde_loss
+
+    optimizer.zero_grad()
+    loss.backward()
+    nn.utils.clip_grad_norm_(params, 1.0)
+    optimizer.step()
+
+    if (step + 1) % 2000 == 0:
+        print(f"    step {step+1}: data={data_loss.item():.6f}, "
+              f"pde={pde_loss.item():.6f}, w={pde_weight:.2f}")
+
+# --- Phase 3: L-BFGS refinement (data as regularizer) ---
+print("\n  Phase 3: L-BFGS refinement...")
+lbfgs = torch.optim.LBFGS(params, lr=0.5, max_iter=20, history_size=50,
+                           line_search_fn="strong_wolfe")
+lbfgs_steps = 0
+
+
+def lbfgs_closure():
+    global lbfgs_steps
+    lbfgs.zero_grad()
+
+    u_pred = head_u(data_in)
+    v_pred = head_v(data_in)
+    data_loss = nn.functional.mse_loss(u_pred, u_target) + \
+                nn.functional.mse_loss(v_pred, v_target)
+
+    pde_loss = compute_pde_residual()
+
+    if not torch.isfinite(pde_loss):
+        return data_loss
+
+    loss = 0.1 * data_loss + pde_loss
+    loss.backward()
+
+    nn.utils.clip_grad_norm_(params, 1.0)
+    lbfgs_steps += 1
+    return loss
+
+
+for i in range(50):
+    loss = lbfgs.step(lbfgs_closure)
+    if (i + 1) % 10 == 0:
+        loss_val = loss.item() if torch.is_tensor(loss) else loss
+        print(f"    L-BFGS iter {i+1}: loss={loss_val:.6f}")
+
+
+# --- Extract ---
+print("\n  Extracting symbolic solutions...")
 xyt_val = torch.cat([x_c.detach(), y_c.detach(), t_c.detach()], dim=1)
 u_exact = (torch.sin(x_c) * torch.cos(y_c) * torch.exp(-2 * nu * t_c)).detach()
 v_exact = (-torch.cos(x_c) * torch.sin(y_c) * torch.exp(-2 * nu * t_c)).detach()
 
-head_u.prune(threshold=0.1, calibration_data=xyt_val)
-head_v.prune(threshold=0.1, calibration_data=xyt_val)
+head_u.prune(threshold=0.05, calibration_data=xyt_val)
+head_v.prune(threshold=0.05, calibration_data=xyt_val)
 
-expr_u = head_u.snap(tolerance=0.15, validation_data=(xyt_val, u_exact))
-expr_v = head_v.snap(tolerance=0.15, validation_data=(xyt_val, v_exact))
+expr_u = head_u.snap(tolerance=0.1, validation_data=(xyt_val, u_exact))
+expr_v = head_v.snap(tolerance=0.1, validation_data=(xyt_val, v_exact))
 
 print(f"\n  u(x,y,t) = {expr_u.string}")
 print(f"  v(x,y,t) = {expr_v.string}")
-print(f"\n  Expected u = sin(x)*cos(y)*exp(-0.2t)")
-print(f"  Expected v = -cos(x)*sin(y)*exp(-0.2t)")
+print(f"\n  Expected: u = sin(x)*cos(y)*exp(-0.2t)")
 
 with torch.no_grad():
-    xt = torch.rand(200, 1) * 2 * 3.14159
-    yt = torch.rand(200, 1) * 2 * 3.14159
-    tt = torch.rand(200, 1)
+    xt = torch.rand(500, 1) * PI2
+    yt = torch.rand(500, 1) * PI2
+    tt = torch.rand(500, 1)
     test_in = torch.cat([xt, yt, tt], dim=1)
 
     u_err = (head_u(test_in) - torch.sin(xt) * torch.cos(yt) * torch.exp(-2 * nu * tt)).abs().mean().item()
@@ -226,8 +258,5 @@ save_html(head_v, "taylor_green_v.html",
           title="Taylor-Green v(x,y,t)", equation=expr_v.string)
 
 print(f"\n{'=' * 60}")
-print("STATUS:")
-print("  These are KNOWN solutions — validation that the method works.")
-print("  Next: train on regimes with NO known closed-form solution.")
-print("  If PDE residual -> 0 and the equation is new -> discovery.")
+print("NEXT: Apply to regimes with NO known closed-form solution.")
 print("=" * 60)
